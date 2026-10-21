@@ -8,7 +8,7 @@ export async function createApp() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  if (process.env.VERCEL !== "1") app.setGlobalPrefix("api");
+  app.setGlobalPrefix("api");
 
   const configuredOrigins = config.get("CORS_ORIGIN", "http://localhost:3000")
     .split(",").map((origin: string) => origin.trim()).filter(Boolean);
