@@ -34,25 +34,29 @@ const crmCrudModules = [
   ["SettingsModule", "settings"]
 ].map(([name, route]) => buildCrudModule(name, route));
 
+const queueModules = process.env.VERCEL === "1" ? [] : [
+  BullModule.forRootAsync({
+    inject: [ConfigService],
+    useFactory: (config: ConfigService) => ({
+      connection: {
+        host: config.get("REDIS_HOST", "localhost"),
+        port: config.get("REDIS_PORT", 6379)
+      }
+    })
+  }),
+  ReminderQueueModule
+];
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get("REDIS_HOST", "localhost"),
-          port: config.get("REDIS_PORT", 6379)
-        }
-      })
-    }),
     PrismaModule,
     AuthModule,
     UsersModule,
     DealsModule,
     CompaniesModule,
     AuditLogsModule,
-    ReminderQueueModule,
+    ...queueModules,
     ...crmCrudModules
   ],
   controllers: [HealthController],
