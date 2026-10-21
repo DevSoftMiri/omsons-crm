@@ -1,0 +1,221 @@
+OMSONS CRM - SUPABASE AND VERCEL DEPLOYMENT GUIDE
+==================================================
+
+IMPORTANT ARCHITECTURE NOTE
+----------------------------
+This repository contains two applications:
+
+  apps/web  - Next.js frontend
+  apps/api  - NestJS backend
+
+Vercel is suitable for apps/web. The NestJS API is a long-running Node
+application and should be deployed separately on Render, Railway, Fly.io,
+Google Cloud Run, or another Node-compatible host. Supabase provides the
+PostgreSQL database; it does not host this NestJS API.
+
+1. PREPARE THE REPOSITORY
+--------------------------
+
+1. Push the complete repository to GitHub, GitLab, or Bitbucket.
+2. Do not commit apps/api/.env or apps/web/.env.
+3. Confirm that package-lock.json is committed.
+4. Confirm that the Prisma schema and migrations are committed:
+
+     apps/api/prisma/schema.prisma
+     apps/api/prisma/migrations/
+
+If there is no migrations directory yet, create the first migration locally
+before deploying:
+
+     npm install
+     npm run db:generate
+     npm run db:migrate
+
+2. CREATE THE SUPABASE DATABASE
+-------------------------------
+
+1. Open https://supabase.com and create a new project.
+2. Choose a strong database password and keep it private.
+3. Open Project Settings > Database.
+4. Copy the connection strings. Use the pooled connection for the running
+   application and the direct connection for Prisma migrations if Supabase
+   provides both.
+
+Typical values are:
+
+  DATABASE_URL=
+  postgresql://postgres.[PROJECT-REF]:[PASSWORD]@[POOLER-HOST]:6543/postgres?pgbouncer=true&connection_limit=1
+
+  DIRECT_URL=
+  postgresql://postgres:[PASSWORD]@[DB-HOST]:5432/postgres
+
+The exact hostnames and parameters must be copied from the Supabase dashboard.
+Do not copy the local Docker URL from apps/api/.env.
+
+3. CONFIGURE PRISMA FOR SUPABASE
+---------------------------------
+
+If using separate pooled and direct Supabase URLs, update the datasource in
+apps/api/prisma/schema.prisma to:
+
+  datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+  }
+
+Then commit the schema change.
+
+Run migrations against Supabase from the repository root:
+
+  PowerShell:
+    $env:DATABASE_URL="<SUPABASE_DATABASE_URL>"
+    $env:DIRECT_URL="<SUPABASE_DIRECT_URL>"
+    npm run db:generate
+    npm --workspace apps/api exec prisma migrate deploy
+
+Alternatively, set these variables in a secure CI environment and run:
+
+    npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+
+Never use prisma db push as the normal production deployment process when
+migrations exist. Use prisma migrate deploy.
+
+4. DEPLOY THE NESTJS API
+------------------------
+
+Deploy apps/api to Render, Railway, Fly.io, Cloud Run, or your preferred
+Node hosting provider.
+
+Use these settings when the provider asks for a monorepo configuration:
+
+  Root directory:      apps/api
+  Build command:       npm run build
+  Start command:       npm run start
+  Node version:        20 or newer
+
+Set these production environment variables on the API host:
+
+  NODE_ENV=production
+  PORT=<provider-provided port, or 4000 if required>
+  DATABASE_URL=<Supabase pooled connection string>
+  DIRECT_URL=<Supabase direct connection string, if schema uses it>
+  JWT_ACCESS_SECRET=<long-random-secret>
+  JWT_REFRESH_SECRET=<different-long-random-secret>
+  JWT_ACCESS_EXPIRES_IN=15m
+  JWT_REFRESH_EXPIRES_IN=7d
+  CORS_ORIGIN=https://<your-vercel-domain>
+
+If Redis/BullMQ features are enabled, also configure a production Redis
+provider and set:
+
+  REDIS_HOST=<redis-host>
+  REDIS_PORT=<redis-port>
+  REDIS_PASSWORD=<redis-password-if-required>
+
+After deployment, verify:
+
+  https://<your-api-domain>/api/companies
+
+The endpoint should return JSON, even if the data array is empty.
+
+5. DEPLOY THE NEXT.JS APP TO VERCEL
+-----------------------------------
+
+1. Open https://vercel.com/new.
+2. Import the repository.
+3. Configure the project as follows:
+
+  Root directory:      apps/web
+  Framework preset:    Next.js
+  Build command:       npm run build
+  Install command:     npm install
+  Node.js version:     20 or newer
+
+4. Add this environment variable in Vercel Project Settings > Environment
+   Variables for Production, Preview, and Development as appropriate:
+
+  NEXT_PUBLIC_API_URL=https://<your-api-domain>/api
+
+Do not include a trailing slash after the API domain. The application builds
+the endpoint URLs by appending paths such as /companies and /deals.
+
+5. Deploy the project.
+6. Add your custom domain in Vercel if needed.
+
+6. UPDATE API CORS AFTER VERCEL DEPLOYMENT
+------------------------------------------
+
+Set the API host's CORS_ORIGIN to the exact Vercel origin, for example:
+
+  CORS_ORIGIN=https://omsons-crm.vercel.app
+
+If both production and preview deployments need access, provide a comma-
+separated allowlist only if the API's CORS implementation supports it:
+
+  CORS_ORIGIN=https://omsons-crm.vercel.app,https://<custom-domain>
+
+Restart or redeploy the API after changing this value.
+
+7. OPTIONAL SEED DATA
+---------------------
+
+Only run the seed script if the seed data is safe for the production project:
+
+  DATABASE_URL=<SUPABASE_DATABASE_URL> npm --workspace apps/api run seed
+
+On PowerShell:
+
+  $env:DATABASE_URL="<SUPABASE_DATABASE_URL>"
+  npm --workspace apps/api run seed
+
+Never seed production with default passwords or test accounts.
+
+8. VERIFY THE DEPLOYMENT
+------------------------
+
+Check all of the following:
+
+  [ ] Vercel opens the homepage successfully.
+  [ ] The browser network request goes to https://<api-domain>/api.
+  [ ] GET /api/companies returns HTTP 200.
+  [ ] Companies load in the Companies page.
+  [ ] Deals load in the Deals page.
+  [ ] Creating a company works.
+  [ ] Authentication and refresh-token flows work.
+  [ ] Browser console has no CORS errors.
+  [ ] API logs show no Prisma or database connection errors.
+  [ ] Supabase database tables exist after prisma migrate deploy.
+
+9. COMMON PROBLEMS
+------------------
+
+"Unable to load companies":
+  Check NEXT_PUBLIC_API_URL, confirm the API is running, and check CORS_ORIGIN.
+
+Prisma cannot connect:
+  Check the Supabase password, URL encoding, pooler/direct URL, and whether
+  migrations have been deployed.
+
+404 from the API:
+  The correct path includes /api, for example /api/companies.
+
+Works locally but not on Vercel:
+  Add NEXT_PUBLIC_API_URL in Vercel and redeploy. NEXT_PUBLIC_* variables are
+  embedded during the Next.js build.
+
+Database connection exhaustion:
+  Use the Supabase pooled connection for DATABASE_URL and keep the Prisma
+  connection_limit small, especially on serverless or autoscaling hosts.
+
+10. SECURITY CHECKLIST
+----------------------
+
+  [ ] No .env file is committed.
+  [ ] JWT secrets are long, random, and different from each other.
+  [ ] Supabase database passwords are stored only in deployment secrets.
+  [ ] Production CORS allows only trusted frontend origins.
+  [ ] Default/test users and passwords are removed or changed.
+  [ ] Supabase backups and database access policies are reviewed.
+  [ ] API and Vercel logs do not print secrets or connection strings.
+
