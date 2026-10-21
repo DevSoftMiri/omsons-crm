@@ -8,5 +8,5 @@
     "experimentalDecorators": true,
     "noEmit": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "api/**/*.ts"]
 }
