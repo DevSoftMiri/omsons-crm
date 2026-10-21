@@ -616,13 +616,13 @@ function DealColumnFooter({
 }) {
   const totalAmount = deals.reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
   const weightedAmount = totalAmount * (probability / 100);
-  const money = (amount: number) => "$" + amount.toLocaleString();
+  const money = (amount: number) => amount.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
   return (
     <div className="mt-3 rounded-b-[22px] border-t border-[#c9c9c9] bg-[#e9e9e9] px-2 pb-2 pt-1 text-sm leading-6 text-[#202020]">
       <div><strong>{money(totalAmount)}</strong> | Total amount</div>
       <div>
-        <strong>{money(totalAmount)}</strong> ({probability}%) | Weighted amount{" "}
+        <strong>{money(weightedAmount)}</strong> ({probability}%) | Weighted amount{" "}
         <Info className="inline-block h-4 w-4 align-[-3px] text-[#666]" aria-label="Weighted amount information" />
         <strong className="sr-only">{money(weightedAmount)}</strong>
       </div>
