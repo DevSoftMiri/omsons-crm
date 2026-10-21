@@ -34,7 +34,9 @@ const crmCrudModules = [
   ["SettingsModule", "settings"]
 ].map(([name, route]) => buildCrudModule(name, route));
 
-const queueModules = process.env.REDIS_HOST ? [
+const redisHost = process.env.REDIS_HOST?.trim();
+const queueEnabled = Boolean(redisHost && redisHost !== "localhost" && redisHost !== "127.0.0.1");
+const queueModules = queueEnabled ? [
   BullModule.forRootAsync({
     inject: [ConfigService],
     useFactory: (config: ConfigService) => ({
