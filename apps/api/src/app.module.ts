@@ -34,7 +34,7 @@ const crmCrudModules = [
   ["SettingsModule", "settings"]
 ].map(([name, route]) => buildCrudModule(name, route));
 
-const queueModules = process.env.VERCEL === "1" ? [] : [
+const queueModules = process.env.REDIS_HOST ? [
   BullModule.forRootAsync({
     inject: [ConfigService],
     useFactory: (config: ConfigService) => ({
@@ -45,7 +45,7 @@ const queueModules = process.env.VERCEL === "1" ? [] : [
     })
   }),
   ReminderQueueModule
-];
+] : [];
 
 @Module({
   imports: [
