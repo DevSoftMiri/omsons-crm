@@ -3,9 +3,14 @@ import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class DashboardService {
+  private readonly cache = new Map<string, { expiresAt: number; value: unknown }>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async summary(query: { period?: string; ownerId?: string; region?: string; pipeline?: string }) {
+    const cacheKey = JSON.stringify({ period: query.period ?? "current-quarter", ownerId: query.ownerId ?? "", region: query.region ?? "", pipeline: query.pipeline ?? "" });
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
     const db = this.prisma as any;
     const now = new Date();
     const start = this.periodStart(query.period ?? "current-quarter", now);
@@ -29,7 +34,9 @@ export class DashboardService {
     const todayTasks = tasks.filter((task: any) => task.dueAt && new Date(task.dueAt) >= today && new Date(task.dueAt) < tomorrow);
     const pendingFollowUps = followUps.filter((item: any) => new Date(item.dueAt) >= today && new Date(item.dueAt) < tomorrow);
     const pipeline = this.groupDeals(openDeals);
-    return { period: query.period ?? "current-quarter", range: { start, end }, metrics: { openPipelineValue: this.amount(openDeals), openDealCount: openDeals.length, newLeads, newCompanies, dealerVisits: visits, followUpsDueToday: pendingFollowUps.length, overdueTasks: overdueTasks.length, dealsClosingThisMonth: closingDeals.length }, pipeline, recentCompanies: recentCompanies.map((company: any) => ({ ...company, openDealValue: this.amount(company.deals) })), pendingWork: { overdueTasks, todayTasks, upcomingFollowUps: followUps.filter((item: any) => new Date(item.dueAt) >= tomorrow).slice(0, 10), closingDeals }, recentActivity: activities, insights: { byRegion: this.groupDeals(openDeals, (deal: any) => deal.company?.regions?.[0] || "Unassigned"), byCustomerType: this.groupDeals(openDeals, (deal: any) => deal.company?.customerType || "Unassigned"), byProductCategory: this.groupDeals(openDeals, (deal: any) => deal.productCategory || "Unassigned") } };
+    const result = { period: query.period ?? "current-quarter", range: { start, end }, metrics: { openPipelineValue: this.amount(openDeals), openDealCount: openDeals.length, newLeads, newCompanies, dealerVisits: visits, followUpsDueToday: pendingFollowUps.length, overdueTasks: overdueTasks.length, dealsClosingThisMonth: closingDeals.length }, pipeline, recentCompanies: recentCompanies.map((company: any) => ({ ...company, openDealValue: this.amount(company.deals) })), pendingWork: { overdueTasks, todayTasks, upcomingFollowUps: followUps.filter((item: any) => new Date(item.dueAt) >= tomorrow).slice(0, 10), closingDeals }, recentActivity: activities, insights: { byRegion: this.groupDeals(openDeals, (deal: any) => deal.company?.regions?.[0] || "Unassigned"), byCustomerType: this.groupDeals(openDeals, (deal: any) => deal.company?.customerType || "Unassigned"), byProductCategory: this.groupDeals(openDeals, (deal: any) => deal.productCategory || "Unassigned") } };
+    this.cache.set(cacheKey, { expiresAt: Date.now() + 15000, value: result });
+    return result;
   }
 
   private amount(items: any[]) { return items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0); }
