@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -216,6 +217,10 @@ function CreateDealModal({ company, onClose, onSaved }: { company: CompanyRecord
 function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }: { company: CompanyRecord | null; onRefresh: () => Promise<void>; collapsedSections: Record<string, boolean>; toggleSection: (title: string) => void }) {
   const [contactModal, setContactModal] = useState(false);
   const [dealModal, setDealModal] = useState(false);
+  const [contactCards, setContactCards] = useState<CompanyContact[]>(company?.contacts ?? []);
+  useEffect(() => { setContactCards(company?.contacts ?? []); }, [company?.contacts]);
+  const moveContact = (index: number, direction: -1 | 1) => setContactCards((current) => { const target = index + direction; if (target < 0 || target >= current.length) return current; const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next; });
+  const dropContact = (from: number, to: number) => setContactCards((current) => { if (from === to) return current; const next = [...current]; const [card] = next.splice(from, 1); next.splice(to, 0, card); return next; });
   return <div className="space-y-4">
           <div
             className="hidden"
@@ -232,8 +237,8 @@ function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }:
               onToggle={() => toggleSection("Contacts (2)")}
             >
               <div className="space-y-3">
-                {(company?.contacts ?? []).map((contact) => (
-                  <div className="rounded-lg border border-[#dbe4ed] p-3" key={contact.id}>
+                {contactCards.map((contact, contactIndex) => (
+                  <div className="rounded-lg border border-[#dbe4ed] p-3" draggable key={contact.id} onDragStart={(event) => event.dataTransfer.setData("contact-index", String(contactIndex))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData("contact-index")); if (Number.isInteger(from)) dropContact(from, contactIndex); }}>
                     <div className="flex gap-3">
                       <span className="grid h-10 w-10 place-items-center rounded-full bg-[#fff1eb] font-bold text-[#9b4a24]">{`${contact.firstName[0] ?? ""}${contact.lastName?.[0] ?? ""}`.toUpperCase()}</span>
                       <div className="min-w-0 flex-1">
@@ -243,7 +248,7 @@ function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }:
                             <p className="text-xs text-[#516f90]">{contact.title || "No job title"}</p>
                             <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#eef6f6] px-2 py-0.5 text-[11px] font-semibold text-[#006b70]">{contact.lifecycleStage || "No lifecycle stage"}</span><span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-semibold text-[#9b4a24]">{contact.leadStatus || "No lead status"}</span><span className="rounded-full bg-[#f2f5f8] px-2 py-0.5 text-[11px] font-semibold text-[#516f90]">{contact.owner?.name || "No owner"}</span></div>
                           </div>
-                          <Ellipsis className="h-4 w-4 text-[#516f90]" />
+                          <div className="flex items-center gap-1"><button className="rounded p-1 text-[#516f90] hover:border-[#ff6848] hover:text-[#ff6848]" type="button" onClick={() => moveContact(contactIndex, -1)} disabled={contactIndex === 0} aria-label="Move contact up"><ChevronUp className="h-4 w-4" /></button><button className="rounded p-1 text-[#516f90] hover:border-[#ff6848] hover:text-[#ff6848]" type="button" onClick={() => moveContact(contactIndex, 1)} disabled={contactIndex === contactCards.length - 1} aria-label="Move contact down"><ChevronDown className="h-4 w-4" /></button><Ellipsis className="h-4 w-4 text-[#516f90]" /></div>
                         </div>
                         <p className="mt-3 flex items-center gap-2 text-xs text-[#213343]">
                           <Mail className="h-3.5 w-3.5 text-[#516f90]" />

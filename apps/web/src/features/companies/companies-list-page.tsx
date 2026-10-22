@@ -2,7 +2,6 @@
 
 import { AppShell } from "@/components/layout/app-shell";
 import {
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -78,6 +77,7 @@ const columnColors: Record<BoardColumn, string> = {
 export function CompaniesListPage() {
   const [viewMode, setViewMode] = useState<"table" | "board">("table");
   const [showViewMenu, setShowViewMenu] = useState(false);
+  const [newColumnName, setNewColumnName] = useState("");
   const [board, setBoard] = useState<BoardState>(initialBoard);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState("");
@@ -97,7 +97,7 @@ export function CompaniesListPage() {
   const [sortBy, setSortBy] = useState("name"); const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const loadCompanies = async () => {
     setLoading(true); setError("");
-    try { const response = await fetch(`${API_URL}/companies?search=${encodeURIComponent(search)}&archived=${showArchived}`); if (!response.ok) throw new Error(); const result = (await response.json()) as CompanyResponse; setCompanies(result.data); }
+    try { const response = await fetch(`${API_URL}/companies?search=${encodeURIComponent(search)}&archived=${showArchived}`); if (!response.ok) throw new Error(); const result = (await response.json()) as CompanyResponse; setCompanies(result.data); setBoard((current) => ({ ...current, Subscriber: result.data.map((company) => ({ id: company.id, name: company.name, date: company.city || "--", due: company.regions.join(", ") || "No region" })) })); }
     catch { setError("Unable to load companies. Make sure the backend and database are running."); }
     finally { setLoading(false); }
   };
@@ -136,6 +136,24 @@ export function CompaniesListPage() {
     });
   };
 
+  const addBoardColumn = () => {
+    const trimmed = newColumnName.trim();
+    if (!trimmed || Object.keys(board).includes(trimmed)) return;
+    setBoard((current) => ({ ...current, [trimmed]: [] } as BoardState));
+    setNewColumnName("");
+    setShowViewMenu(false);
+  };
+  const reorderColumns = (from: string, to: string) => setBoard((current) => { const entries = Object.entries(current); const fromIndex = entries.findIndex(([key]) => key === from); const toIndex = entries.findIndex(([key]) => key === to); if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return current; const [entry] = entries.splice(fromIndex, 1); entries.splice(toIndex, 0, entry); return Object.fromEntries(entries) as BoardState; });
+
+  const reorderCard = (cardId: string, targetColumn: BoardColumn, targetIndex: number) => {
+    setBoard((current) => {
+      let movingCard: CompanyCard | undefined;
+      const next = Object.fromEntries(Object.entries(current).map(([column, cards]) => [column, cards.filter((card) => { if (card.id === cardId) movingCard = card; return card.id !== cardId; })])) as BoardState;
+      if (movingCard) next[targetColumn].splice(Math.max(0, Math.min(targetIndex, next[targetColumn].length)), 0, movingCard);
+      return next;
+    });
+  };
+
   return (
     <AppShell>
       <div className="rounded-[14px] border border-[#dbe4ed] bg-white p-4 shadow-sm">
@@ -156,14 +174,7 @@ export function CompaniesListPage() {
 
         <div className="relative border-b border-[#dbe4ed]">
           <div className="flex items-center gap-1 overflow-x-auto">
-            {viewMode === "board" ? (
-              <button className="inline-flex items-center gap-3 border-b-2 border-[#008a3d] px-4 py-2.5 text-sm font-medium text-[#213343]" type="button">
-                <GripVertical className="h-4 w-4" />
-                All companies-3
-                <Check className="h-4 w-4" />
-              </button>
-            ) : null}
-            <button className={`px-4 py-2.5 text-sm font-medium ${viewMode === "table" ? "border-b-2 border-[#ff5c35] bg-[#fff1eb] text-[#ff5c35]" : "text-[#516f90]"}`} onClick={() => setViewMode("table")} type="button">
+            <button className={`px-4 py-2.5 text-sm font-medium ${viewMode === "table" || viewMode === "board" ? "border-b-2 border-[#ff5c35] bg-[#fff1eb] text-[#ff5c35]" : "text-[#516f90]"}`} onClick={() => setViewMode("table")} type="button">
               <span className="inline-flex items-center gap-2">
                 <Table2 className="h-4 w-4" />
                 All companies
@@ -175,7 +186,7 @@ export function CompaniesListPage() {
                 My companies
               </span>
             </button>
-            <button className="p-3 text-[#213343]" aria-label="Add view" onClick={() => setShowViewMenu((open) => !open)} type="button">
+            <button className="p-3 text-[#213343]" aria-label="Add column" onClick={() => setShowViewMenu((open) => !open)} type="button">
               <Plus className="h-5 w-5" />
             </button>
           </div>
@@ -186,6 +197,7 @@ export function CompaniesListPage() {
                 <CreateViewButton icon={Table2} label="Table" onClick={() => { setViewMode("table"); setShowViewMenu(false); }} />
                 <CreateViewButton icon={GripVertical} label="Board" onClick={() => { setViewMode("board"); setShowViewMenu(false); }} />
               </div>
+              <div className="mt-4 flex gap-2"><input className="min-w-0 flex-1 rounded-md border border-[#cbd6e2] px-3 py-2 text-sm outline-none focus:border-[#ff5c35]" placeholder="Column name" value={newColumnName} onChange={(event) => setNewColumnName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addBoardColumn(); }} /><button className="rounded-md bg-[#006b70] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" type="button" disabled={!newColumnName.trim()} onClick={addBoardColumn}>Add column</button></div>
               <div className="mt-6 border-t border-[#d0d7de] pt-4">
                 <div className="flex items-center justify-between text-sm font-bold">
                   <button className="inline-flex items-center gap-2" type="button"><ChevronRight className="h-4 w-4" />Add existing view</button>
@@ -206,7 +218,7 @@ export function CompaniesListPage() {
             <SortMenu options={companySortOptions} value={sortBy} direction={sortDirection} onChange={(value, direction) => { setSortBy(value); setSortDirection(direction); }} />
             <button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${showArchived ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#9fb3c8] bg-white"}`} type="button" onClick={() => setShowArchived((value) => !value)}>Archived</button>
             <span className="h-8 w-px bg-[#dbe4ed]" />
-            <CircleButton icon={Plus} label="Add property" />
+            <CircleButton icon={Plus} label="Add column" onClick={() => setShowViewMenu(true)} />
             <CircleButton icon={Columns3} label="Edit columns" />
             <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]" type="button" onClick={() => { setFiltersVisible(true); setFiltersOpen(true); }}><Filter className="h-4 w-4" />Advanced filters</button>
           </div>
@@ -220,7 +232,7 @@ export function CompaniesListPage() {
 
         {filtersVisible ? <div className="flex flex-wrap items-center gap-6 border-b border-[#dbe4ed] pb-3 text-sm font-semibold text-[#213343]"><FilterButton label="Company owner" onClick={() => setFiltersOpen(true)} /><FilterButton label="Create date" onClick={() => setFiltersOpen(true)} /><FilterButton label="Last activity date" onClick={() => setFiltersOpen(true)} /><FilterButton label="Lead status" onClick={() => setFiltersOpen(true)} /><button className="font-semibold text-[#ff5c35]" type="button" onClick={() => setFiltersVisible(false)}>Hide filters</button></div> : null}
 
-        {loading ? <div className="p-10 text-center text-[#516f90]">Loading companies...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : visibleCompanies.length === 0 ? <div className="p-10 text-center text-[#516f90]">No companies found.</div> : viewMode === "table" ? <CompaniesTable companies={visibleCompanies} onRefresh={loadCompanies} activityFilterOpen={activityFilterOpen} setActivityFilterOpen={setActivityFilterOpen} activityRange={activityRange} setActivityRange={setActivityRange} activityOperator={activityOperator} setActivityOperator={setActivityOperator} activityStart={activityStart} setActivityStart={setActivityStart} activityEnd={activityEnd} setActivityEnd={setActivityEnd} /> : <CompaniesBoard board={{ ...board, Subscriber: visibleCompanies.map((company) => ({ id: company.id, name: company.name, date: company.city || "--", due: company.regions.join(", ") || "No region" })) }} onMoveCard={moveCard} />}
+        {loading ? <div className="p-10 text-center text-[#516f90]">Loading companies...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : viewMode === "table" ? <CompaniesTable companies={visibleCompanies} onRefresh={loadCompanies} activityFilterOpen={activityFilterOpen} setActivityFilterOpen={setActivityFilterOpen} activityRange={activityRange} setActivityRange={setActivityRange} activityOperator={activityOperator} setActivityOperator={setActivityOperator} activityStart={activityStart} setActivityStart={setActivityStart} activityEnd={activityEnd} setActivityEnd={setActivityEnd} /> : <CompaniesBoard board={board} onMoveCard={moveCard} onReorderCard={reorderCard} onReorderColumns={reorderColumns} onAddCompany={() => window.location.assign("/companies/new")} />}
       </div>
     </AppShell>
   );
@@ -279,16 +291,19 @@ function CompaniesTable({ companies, onRefresh, activityFilterOpen, setActivityF
   );
 }
 
-function CompaniesBoard({ board, onMoveCard }: { board: BoardState; onMoveCard: (cardId: string, targetColumn: BoardColumn) => void }) {
+function CompaniesBoard({ board, onMoveCard, onReorderCard, onReorderColumns, onAddCompany }: { board: BoardState; onMoveCard: (cardId: string, targetColumn: BoardColumn) => void; onReorderCard: (cardId: string, targetColumn: BoardColumn, targetIndex: number) => void; onReorderColumns: (from: string, to: string) => void; onAddCompany: () => void }) {
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+  const [hoveredColumn, setHoveredColumn] = useState<BoardColumn | null>(null);
   return (
     <div className="overflow-x-auto border-t border-[#dbe4ed] pb-2">
       <div className="flex min-w-[1280px] gap-3 py-3">
         {(Object.keys(board) as BoardColumn[]).map((column) => (
-          <section className="flex h-[245px] w-[350px] shrink-0 flex-col rounded-2xl bg-[#eeeeee]" key={column} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const cardId = event.dataTransfer.getData("text/plain"); if (cardId) onMoveCard(cardId, column); }}>
-            <div className="px-3 pt-3 text-sm font-bold"><span className={`inline-flex rounded-md px-3 py-1 ${columnColors[column]}`}>{column}</span><span className="ml-2">{board[column].length}</span></div>
+          <section className="flex h-[520px] w-[280px] shrink-0 flex-col rounded-2xl bg-[#eeeeee] transition-colors hover:bg-[#e9e9e9]" key={column} onMouseEnter={() => setHoveredColumn(column)} onMouseLeave={() => setHoveredColumn(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const columnId = event.dataTransfer.getData("company-column"); const cardId = event.dataTransfer.getData("text/plain"); if (columnId) onReorderColumns(columnId, column); else if (cardId) onMoveCard(cardId, column); }}>
+            <div className="flex items-center gap-2 px-3 pt-3 text-sm font-bold"><button className={`inline-flex cursor-grab items-center rounded-md px-3 py-1 ${columnColors[column] ?? "bg-[#64748b] text-white"}`} draggable onDragStart={(event) => { event.stopPropagation(); event.dataTransfer.setData("company-column", column); setDraggedColumn(column); }} onDragEnd={() => setDraggedColumn(null)} type="button">☷ {column}</button><span>{board[column].length}</span>{draggedColumn === column ? <span className="text-xs text-[#ff5c35]">Move</span> : null}</div>
+            {hoveredColumn === column ? <button className="mx-3 mt-3 flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#b7c3ce] bg-white px-3 py-3 text-sm font-semibold text-[#516f90] transition hover:border-[#ff5c35] hover:text-[#ff5c35]" type="button" onClick={onAddCompany}><Plus className="h-4 w-4" /> Add company</button> : null}
             <div className="mt-3 flex-1 overflow-y-auto px-3 pb-3">
-              {board[column].map((card) => (
-                <Link className="block rounded-2xl border border-[#d0d7de] bg-white p-4 shadow-sm transition hover:shadow-md" draggable href="/companies/acme-industries" key={card.id} onDragStart={(event) => event.dataTransfer.setData("text/plain", card.id)}>
+              {board[column].map((card, cardIndex) => (
+                <Link className="block rounded-2xl border border-[#d0d7de] bg-white p-4 shadow-sm transition hover:border-[#ff5c35] hover:shadow-md" draggable href={`/companies/${card.id}`} key={card.id} onDragStart={(event) => event.dataTransfer.setData("text/plain", card.id)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const cardId = event.dataTransfer.getData("text/plain"); if (cardId) onReorderCard(cardId, column, cardIndex); }}>
                   <h3 className="text-base font-bold text-[#007a8a]">{card.name}</h3>
                   <p className="mt-4 flex items-center gap-2 text-sm text-[#213343]"><span>□</span>{card.date}</p>
                   <div className="mt-5 flex items-center justify-between border-t border-[#dbe4ed] pt-2 text-sm"><span className="text-[#516f90]">edit</span><span className="rounded-full border border-[#9fb3c8] px-3 py-1">call | {card.due}</span></div>
@@ -302,8 +317,8 @@ function CompaniesBoard({ board, onMoveCard }: { board: BoardState; onMoveCard: 
   );
 }
 
-function CircleButton({ icon: Icon, label }: { icon: typeof Plus; label: string }) {
-  return <button className="grid h-10 w-10 place-items-center rounded-full border border-[#9fb3c8] bg-white text-[#213343]" aria-label={label}><Icon className="h-4 w-4" /></button>;
+function CircleButton({ icon: Icon, label, onClick }: { icon: typeof Plus; label: string; onClick?: () => void }) {
+  return <button className="grid h-10 w-10 place-items-center rounded-full border border-[#9fb3c8] bg-white text-[#213343] hover:border-[#ff5c35] hover:text-[#ff5c35]" aria-label={label} onClick={onClick} type="button"><Icon className="h-4 w-4" /></button>;
 }
 
 function ViewButton({ icon: Icon, active, onClick }: { icon: typeof List; active?: boolean; onClick: () => void }) {
