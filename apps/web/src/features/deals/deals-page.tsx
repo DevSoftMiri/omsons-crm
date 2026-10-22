@@ -556,9 +556,8 @@ function DealsBoard({
             {deals
               .filter((deal) => deal.stage === label)
               .map((deal) => (
-                <div onDragEnter={(event) => { event.stopPropagation(); const draggedId = event.dataTransfer.getData("deal-id"); if (draggedId && draggedId !== deal.id) event.currentTarget.classList.add("border-t-2", "border-[#1683ff]"); }} onDragLeave={(event) => { event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); const dragged = deals.find((item) => item.id === event.dataTransfer.getData("deal-id")); if (dragged) void moveDeal(dragged, label, deal.id); }}>
+                <div key={deal.id} onDragEnter={(event) => { event.stopPropagation(); const draggedId = event.dataTransfer.getData("deal-id"); if (draggedId && draggedId !== deal.id) event.currentTarget.classList.add("border-t-2", "border-[#1683ff]"); }} onDragLeave={(event) => { event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); const dragged = deals.find((item) => item.id === event.dataTransfer.getData("deal-id")); if (dragged) void moveDeal(dragged, label, deal.id); }}>
                 <DealCard
-                  key={deal.id}
                   name={deal.name}
                   amount={deal.amount}
                   onCreateTask={onCreateTask}
