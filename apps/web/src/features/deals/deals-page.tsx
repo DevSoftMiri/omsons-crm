@@ -69,6 +69,7 @@ export function DealsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [dealCount, setDealCount] = useState(0);
   const [dealName, setDealName] = useState("");
+  const [dealAmount, setDealAmount] = useState("");
   const [deals, setDeals] = useState<Deal[]>([]);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -258,6 +259,8 @@ export function DealsPage() {
           error={createError}
           dealName={dealName}
           setDealName={setDealName}
+          dealAmount={dealAmount}
+          setDealAmount={setDealAmount}
           onCancel={() => {
             setCreateError("");
             setCreateOpen(false);
@@ -268,7 +271,7 @@ export function DealsPage() {
               const response = await fetch(`${API_URL}/deals`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: dealName.trim() }),
+                body: JSON.stringify({ name: dealName.trim(), amount: dealAmount === "" ? null : Number(dealAmount) }),
               });
               if (!response.ok) {
                 setCreateError(await response.text());
@@ -300,12 +303,16 @@ export function DealsPage() {
 function CreateDealModal({
   dealName,
   setDealName,
+  dealAmount,
+  setDealAmount,
   onCancel,
   onCreate,
   error,
 }: {
   dealName: string;
   setDealName: (value: string) => void;
+  dealAmount: string;
+  setDealAmount: (value: string) => void;
   onCancel: () => void;
   onCreate: () => void;
   error?: string;
@@ -386,7 +393,7 @@ function CreateDealModal({
               <option>Presentation Scheduled</option>
             </select>,
           )}
-          {field("Amount", <input className={input} min="0" type="number" />)}
+          {field("Amount", <input className={input} min="0" type="number" value={dealAmount} onChange={(event) => setDealAmount(event.target.value)} />)}
           {field("Close date", <input className={input} type="date" />)}
           {field(
             "Deal owner",
@@ -487,12 +494,15 @@ function DealsBoard({
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [dropStage, setDropStage] = useState<string | null>(null);
-  const moveDeal = async (deal: Deal, stage: string) => {
-    if (deal.stage === stage) return;
+  const moveDeal = async (deal: Deal, stage: string, beforeId?: string) => {
+    if (deal.stage === stage && !beforeId) return;
     const previous = deals;
-    onDealsChange(
-      deals.map((item) => (item.id === deal.id ? { ...item, stage } : item)),
-    );
+    const without = deals.filter((item) => item.id !== deal.id);
+    const targetItems = without.filter((item) => item.stage === stage);
+    const insertionIndex = beforeId ? targetItems.findIndex((item) => item.id === beforeId) : targetItems.length;
+    targetItems.splice(insertionIndex < 0 ? targetItems.length : insertionIndex, 0, { ...deal, stage });
+    const reordered = [...without.filter((item) => item.stage !== stage), ...targetItems];
+    onDealsChange(reordered);
     try {
       const response = await fetch(`${API_URL}/deals/${deal.id}`, {
         method: "PATCH",
@@ -546,9 +556,11 @@ function DealsBoard({
             {deals
               .filter((deal) => deal.stage === label)
               .map((deal) => (
+                <div onDragEnter={(event) => { event.stopPropagation(); const draggedId = event.dataTransfer.getData("deal-id"); if (draggedId && draggedId !== deal.id) event.currentTarget.classList.add("border-t-2", "border-[#1683ff]"); }} onDragLeave={(event) => { event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); const dragged = deals.find((item) => item.id === event.dataTransfer.getData("deal-id")); if (dragged) void moveDeal(dragged, label, deal.id); }}>
                 <DealCard
                   key={deal.id}
                   name={deal.name}
+                  amount={deal.amount}
                   onCreateTask={onCreateTask}
                   onCreateNote={onCreateNote}
                   onDragStart={(event) => {
@@ -566,6 +578,7 @@ function DealsBoard({
                     window.setTimeout(() => preview.remove(), 0);
                   }}
                 />
+                </div>
               ))}
             <button
               className="mt-3 w-full rounded-full border border-[#8d8d8d] bg-white py-2 text-sm font-medium text-[#213343] hover:bg-[#f7f9fb]"
@@ -616,7 +629,7 @@ function DealColumnFooter({
   deals: Deal[];
   probability: number;
 }) {
-  const totalAmount = deals.reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
+  const totalAmount = deals.reduce((sum, deal) => sum + (deal.amount == null ? 0 : Number(deal.amount)), 0);
   const weightedAmount = totalAmount * (probability / 100);
   const money = (amount: number) => amount.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
@@ -652,11 +665,13 @@ function DealFieldTooltip({
 
 function DealCard({
   name,
+  amount,
   onDragStart,
   onCreateTask,
   onCreateNote,
 }: {
   name: string;
+  amount?: number | null;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
   onCreateTask: () => void;
   onCreateNote: () => void;
@@ -681,10 +696,10 @@ function DealCard({
           10/31/2026
         </p>
       </DealFieldTooltip>
-      <DealFieldTooltip label="Amount: ₹100">
+      <DealFieldTooltip label={`Amount: ${amount == null ? "Not set" : `₹${amount.toLocaleString("en-IN")}`} `}>
         <p className="mt-2 flex items-center gap-2">
           <IndianRupee className="h-4 w-4" aria-hidden="true" />
-          ₹100
+          {amount == null ? "—" : amount.toLocaleString("en-IN")}
         </p>
       </DealFieldTooltip>
       <DealFieldTooltip label="Deal owner: Soft Dev">
