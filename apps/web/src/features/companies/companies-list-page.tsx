@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronsUpDown,
   Columns3,
   Download,
   EllipsisVertical,
@@ -24,10 +23,37 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
+import { sortRecords } from "@/components/ui/sort-records";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
-type Company = { id: string; name: string; phone?: string | null; createdAt?: string; updatedAt?: string; owner?: { name: string } | null; industry?: string | null; city?: string | null; state?: string | null; country: string; regions: string[]; isArchived: boolean; parentCompanyId?: string | null };
+type Company = { id: string; name: string; phone?: string | null; createdAt?: string; updatedAt?: string; owner?: { id?: string; name: string } | null; contacts?: { leadStatus?: string | null }[]; industry?: string | null; city?: string | null; state?: string | null; country: string; regions: string[]; isArchived: boolean; parentCompanyId?: string | null; customerType?: string | null; companySize?: string | null; annualRevenue?: number | null; customerSince?: string | null };
+const companySortOptions = [{ value: "name", label: "Company name" }, { value: "owner", label: "Company owner" }, { value: "createdAt", label: "Create date" }, { value: "updatedAt", label: "Last activity date" }, { value: "lastContactedAt", label: "Last contacted date" }, { value: "nextFollowUpAt", label: "Next follow-up date" }, { value: "contacts", label: "Number of contacts" }, { value: "deals", label: "Number of open deals" }, { value: "annualRevenue", label: "Annual revenue" }, { value: "industry", label: "Industry" }, { value: "regions", label: "Region" }, { value: "city", label: "City / State" }, { value: "country", label: "Country" }, { value: "customerType", label: "Customer type" }, { value: "companySize", label: "Company size" }, { value: "leadStatus", label: "Lead status" }, { value: "lifecycleStage", label: "Lifecycle stage" }];
 type CompanyResponse = { data: Company[]; page: number; limit: number; total: number; totalPages: number };
+type DateRangeKey = "" | "today" | "yesterday" | "tomorrow" | "this-week" | "this-week-so-far" | "last-week" | "next-week" | "this-month" | "this-month-so-far" | "last-month" | "next-month" | "this-quarter" | "this-fiscal-quarter" | "this-quarter-so-far" | "this-fiscal-quarter-so-far" | "last-quarter" | "last-fiscal-quarter" | "next-quarter" | "next-fiscal-quarter" | "this-year" | "this-fiscal-year" | "this-year-so-far" | "this-fiscal-year-so-far" | "last-year" | "last-fiscal-year" | "next-year" | "next-fiscal-year" | "last-7-days" | "last-14-days" | "last-30-days" | "last-60-days" | "last-90-days" | "last-180-days" | "last-365-days";
+type DateOperator = "any-of" | "between" | "known" | "unknown";
+const dateRangeOptions: { value: DateRangeKey; label: string; description: string }[] = [
+  ["today", "Today", "All of today"], ["yesterday", "Yesterday", "The previous 24 hour day"], ["tomorrow", "Tomorrow", "The next 24 hour day"],
+  ["this-week", "This week", "The current calendar week"], ["this-week-so-far", "This week so far", "The current calendar week up to today"], ["last-week", "Last week", "The previous calendar week"], ["next-week", "Next week", "The next calendar week"],
+  ["this-month", "This month", "The current calendar month"], ["this-month-so-far", "This month so far", "The current calendar month up to today"], ["last-month", "Last month", "The previous calendar month"], ["next-month", "Next month", "The next calendar month"],
+  ["this-quarter", "This quarter", "The current quarter"], ["this-fiscal-quarter", "This fiscal quarter", "The current fiscal quarter"], ["this-quarter-so-far", "This quarter so far", "The current quarter up to today"], ["this-fiscal-quarter-so-far", "This fiscal quarter so far", "The current fiscal quarter up to today"], ["last-quarter", "Last quarter", "The previous full quarter"], ["last-fiscal-quarter", "Last fiscal quarter", "The previous full fiscal quarter"], ["next-quarter", "Next quarter", "The next full quarter"], ["next-fiscal-quarter", "Next fiscal quarter", "The next full fiscal quarter"],
+  ["this-year", "This year", "The current calendar year"], ["this-fiscal-year", "This fiscal year", "The current fiscal year"], ["this-year-so-far", "This year so far", "The current calendar year up to today"], ["this-fiscal-year-so-far", "This fiscal year so far", "The current fiscal year up to today"], ["last-year", "Last year", "The previous calendar year"], ["last-fiscal-year", "Last fiscal year", "The previous fiscal year"], ["next-year", "Next year", "The next calendar year"], ["next-fiscal-year", "Next fiscal year", "The next fiscal year"],
+  ["last-7-days", "Last 7 days", "The previous 7 days before today"], ["last-14-days", "Last 14 days", "The previous 14 days before today"], ["last-30-days", "Last 30 days", "The previous 30 days before today"], ["last-60-days", "Last 60 days", "The previous 60 days before today"], ["last-90-days", "Last 90 days", "The previous 90 days before today"], ["last-180-days", "Last 180 days", "The previous 180 days before today"], ["last-365-days", "Last 365 days", "The previous 365 days before today"],
+].map(([value, label, description]) => ({ value: value as DateRangeKey, label, description }));
+
+function dateRangeBounds(range: DateRangeKey, now = new Date()): [number, number] | null {
+  if (!range) return null;
+  const start = new Date(now); start.setHours(0, 0, 0, 0);
+  const day = 86400000;
+  const end = (date: Date) => { const next = new Date(date); next.setDate(next.getDate() + 1); return next.getTime(); };
+  if (range === "last-7-days" || range === "last-14-days" || range === "last-30-days" || range === "last-60-days" || range === "last-90-days" || range === "last-180-days" || range === "last-365-days") return [start.getTime() - Number(range.split("-")[1]) * day, start.getTime()];
+  if (range === "today") return [start.getTime(), end(start)];
+  if (range === "yesterday") { const date = new Date(start.getTime() - day); return [date.getTime(), start.getTime()]; }
+  if (range === "tomorrow") { const date = new Date(end(start)); return [date.getTime(), end(date)]; }
+  const period = range.includes("week") ? "week" : range.includes("month") ? "month" : range.includes("year") ? "year" : "quarter";
+  if (range.startsWith("last-") || range.startsWith("next-")) { const direction = range.startsWith("last-") ? -1 : 1; const date = new Date(start); if (period === "week") date.setDate(date.getDate() - date.getDay() + direction * 7); if (period === "month") date.setMonth(date.getMonth() + direction); if (period === "quarter") date.setMonth(Math.floor(date.getMonth() / 3) * 3 + direction * 3); if (period === "year") date.setFullYear(date.getFullYear() + direction); const finish = new Date(date); if (period === "week") finish.setDate(finish.getDate() + 7); if (period === "month") finish.setMonth(finish.getMonth() + 1); if (period === "quarter") finish.setMonth(finish.getMonth() + 3); if (period === "year") finish.setFullYear(finish.getFullYear() + 1); return [date.getTime(), finish.getTime()]; }
+  const date = new Date(start); if (period === "week") date.setDate(date.getDate() - date.getDay()); if (period === "month") date.setDate(1); if (period === "quarter") date.setMonth(Math.floor(date.getMonth() / 3) * 3, 1); if (period === "year") date.setMonth(0, 1); const finish = new Date(date); if (period === "week") finish.setDate(finish.getDate() + 7); if (period === "month") finish.setMonth(finish.getMonth() + 1); if (period === "quarter") finish.setMonth(finish.getMonth() + 3); if (period === "year") finish.setFullYear(finish.getFullYear() + 1); return [date.getTime(), range.includes("so-far") ? end(start) : finish.getTime()];
+}
 
 type BoardColumn = "Subscriber" | "Lead" | "Marketing Qualified Lead" | "Sales Qualified Lead" | "Opportunity";
 type CompanyCard = { id: string; name: string; date: string; due: string };
@@ -58,6 +84,17 @@ export function CompaniesListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [activityFilterOpen, setActivityFilterOpen] = useState(false);
+  const [activityRange, setActivityRange] = useState<DateRangeKey>("");
+  const [activityOperator, setActivityOperator] = useState<DateOperator>("any-of");
+  const [activityStart, setActivityStart] = useState("");
+  const [activityEnd, setActivityEnd] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [createRange, setCreateRange] = useState<DateRangeKey>("");
+  const [leadStatusFilter, setLeadStatusFilter] = useState("");
+  const [sortBy, setSortBy] = useState("name"); const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const loadCompanies = async () => {
     setLoading(true); setError("");
     try { const response = await fetch(`${API_URL}/companies?search=${encodeURIComponent(search)}&archived=${showArchived}`); if (!response.ok) throw new Error(); const result = (await response.json()) as CompanyResponse; setCompanies(result.data); }
@@ -65,6 +102,19 @@ export function CompaniesListPage() {
     finally { setLoading(false); }
   };
   useEffect(() => { const timer = window.setTimeout(() => void loadCompanies(), 250); return () => window.clearTimeout(timer); }, [search, showArchived]);
+  const presetBounds = activityOperator === "any-of" ? dateRangeBounds(activityRange) : null;
+  const explicitBounds = activityOperator === "between" && activityStart && activityEnd ? [new Date(`${activityStart}T00:00:00`).getTime(), new Date(`${activityEnd}T23:59:59.999`).getTime()] as [number, number] : null;
+  const createBounds = dateRangeBounds(createRange);
+  const visibleCompanies = sortRecords(companies.filter((company) => {
+    if (ownerFilter && company.owner?.id !== ownerFilter) return false;
+    if (leadStatusFilter && !company.contacts?.some((contact) => contact.leadStatus === leadStatusFilter)) return false;
+    if (createBounds) { const created = company.createdAt ? new Date(company.createdAt).getTime() : NaN; if (!Number.isFinite(created) || created < createBounds[0] || created >= createBounds[1]) return false; }
+    const timestamp = company.updatedAt ? new Date(company.updatedAt).getTime() : NaN;
+    if (activityOperator === "known") return Number.isFinite(timestamp);
+    if (activityOperator === "unknown") return !Number.isFinite(timestamp);
+    const bounds = presetBounds ?? explicitBounds;
+    return !bounds || (Number.isFinite(timestamp) && timestamp >= bounds[0] && timestamp <= bounds[1]);
+  }), sortBy, sortDirection, (company, key) => key === "owner" ? company.owner?.name : key === "contacts" ? company.contacts?.length : key === "regions" ? company.regions.join(", ") : key === "city" ? `${company.city ?? ""} ${company.state ?? ""}` : key === "leadStatus" ? company.contacts?.[0]?.leadStatus : key === "lifecycleStage" ? company.contacts?.[0]?.leadStatus : company[key as keyof Company]);
 
   const moveCard = (cardId: string, targetColumn: BoardColumn) => {
     setBoard((current) => {
@@ -152,13 +202,13 @@ export function CompaniesListPage() {
               <input className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#7c98b6]" placeholder={viewMode === "board" ? "Search ( / )" : "Search companies..."} value={search} onChange={(event) => setSearch(event.target.value)} />
               <Search className="h-4 w-4" />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full border border-[#9fb3c8] bg-[#f7f9fb] px-4 text-sm font-medium"><Filter className="h-4 w-4" />Filter</button>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full border border-[#9fb3c8] bg-white px-4 text-sm font-medium"><ChevronsUpDown className="h-4 w-4" />Sort by</button>
+            <div className="relative"><button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#9fb3c8] bg-[#f7f9fb]"}`} type="button" onClick={() => { setFiltersVisible((visible) => !visible); setFiltersOpen(false); }}><Filter className="h-4 w-4" />Filter</button>{filtersOpen ? <CompanyFilters companies={companies} ownerFilter={ownerFilter} setOwnerFilter={setOwnerFilter} createRange={createRange} setCreateRange={setCreateRange} leadStatusFilter={leadStatusFilter} setLeadStatusFilter={setLeadStatusFilter} /> : null}</div>
+            <SortMenu options={companySortOptions} value={sortBy} direction={sortDirection} onChange={(value, direction) => { setSortBy(value); setSortDirection(direction); }} />
             <button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${showArchived ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#9fb3c8] bg-white"}`} type="button" onClick={() => setShowArchived((value) => !value)}>Archived</button>
             <span className="h-8 w-px bg-[#dbe4ed]" />
             <CircleButton icon={Plus} label="Add property" />
             <CircleButton icon={Columns3} label="Edit columns" />
-            <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]"><Filter className="h-4 w-4" />Advanced filters</button>
+            <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]" type="button" onClick={() => { setFiltersVisible(true); setFiltersOpen(true); }}><Filter className="h-4 w-4" />Advanced filters</button>
           </div>
           <div className="flex items-center gap-2">
             <ViewButton active={viewMode === "board"} icon={GripVertical} onClick={() => setViewMode("board")} />
@@ -168,17 +218,28 @@ export function CompaniesListPage() {
           </div>
         </div>
 
-        {loading ? <div className="p-10 text-center text-[#516f90]">Loading companies...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : companies.length === 0 ? <div className="p-10 text-center text-[#516f90]">No companies found.</div> : viewMode === "table" ? <CompaniesTable companies={companies} onRefresh={loadCompanies} /> : <CompaniesBoard board={{ ...board, Subscriber: companies.map((company) => ({ id: company.id, name: company.name, date: company.city || "--", due: company.regions.join(", ") || "No region" })) }} onMoveCard={moveCard} />}
+        {filtersVisible ? <div className="flex flex-wrap items-center gap-6 border-b border-[#dbe4ed] pb-3 text-sm font-semibold text-[#213343]"><FilterButton label="Company owner" onClick={() => setFiltersOpen(true)} /><FilterButton label="Create date" onClick={() => setFiltersOpen(true)} /><FilterButton label="Last activity date" onClick={() => setFiltersOpen(true)} /><FilterButton label="Lead status" onClick={() => setFiltersOpen(true)} /><button className="font-semibold text-[#ff5c35]" type="button" onClick={() => setFiltersVisible(false)}>Hide filters</button></div> : null}
+
+        {loading ? <div className="p-10 text-center text-[#516f90]">Loading companies...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : visibleCompanies.length === 0 ? <div className="p-10 text-center text-[#516f90]">No companies found.</div> : viewMode === "table" ? <CompaniesTable companies={visibleCompanies} onRefresh={loadCompanies} activityFilterOpen={activityFilterOpen} setActivityFilterOpen={setActivityFilterOpen} activityRange={activityRange} setActivityRange={setActivityRange} activityOperator={activityOperator} setActivityOperator={setActivityOperator} activityStart={activityStart} setActivityStart={setActivityStart} activityEnd={activityEnd} setActivityEnd={setActivityEnd} /> : <CompaniesBoard board={{ ...board, Subscriber: visibleCompanies.map((company) => ({ id: company.id, name: company.name, date: company.city || "--", due: company.regions.join(", ") || "No region" })) }} onMoveCard={moveCard} />}
       </div>
     </AppShell>
   );
+}
+
+function CompanyFilters({ companies, ownerFilter, setOwnerFilter, createRange, setCreateRange, leadStatusFilter, setLeadStatusFilter }: { companies: Company[]; ownerFilter: string; setOwnerFilter: (value: string) => void; createRange: DateRangeKey; setCreateRange: (value: DateRangeKey) => void; leadStatusFilter: string; setLeadStatusFilter: (value: string) => void }) {
+  const owners = Array.from(new Map(companies.filter((company) => company.owner?.id).map((company) => [company.owner!.id!, company.owner!.name])).entries());
+  return <div className="absolute left-0 top-12 z-40 w-[360px] rounded-2xl border border-[#d0d7de] bg-white p-5 shadow-xl"><h3 className="mb-4 text-base font-bold text-[#213343]">Filter companies</h3><label className="mb-3 block text-sm font-semibold">Company owner<select className="mt-1 h-10 w-full rounded-lg border border-[#9fb3c8] bg-white px-3 font-normal" value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)}><option value="">Any owner</option>{owners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label><label className="mb-3 block text-sm font-semibold">Create date<select className="mt-1 h-10 w-full rounded-lg border border-[#9fb3c8] bg-white px-3 font-normal" value={createRange} onChange={(event) => setCreateRange(event.target.value as DateRangeKey)}><option value="">Any date</option>{dateRangeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="mb-3 block text-sm font-semibold">Lead status<select className="mt-1 h-10 w-full rounded-lg border border-[#9fb3c8] bg-white px-3 font-normal" value={leadStatusFilter} onChange={(event) => setLeadStatusFilter(event.target.value)}><option value="">Any status</option><option value="NEW">New</option><option value="CONTACTED">Contacted</option><option value="QUALIFIED">Qualified</option><option value="PROPOSAL">Proposal</option><option value="WON">Won</option><option value="LOST">Lost</option></select></label><p className="mt-4 text-xs text-[#516f90]">Last activity date can be filtered from its column header. Advanced filters are available here.</p></div>;
+}
+
+function FilterButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button className="inline-flex items-center gap-1" type="button" onClick={onClick}>{label}<ChevronDown className="h-4 w-4" /></button>;
 }
 
 function CreateViewButton({ icon: Icon, label, onClick }: { icon: typeof Table2; label: string; onClick: () => void }) {
   return <button className="rounded-md border border-[#d0d7de] p-4 text-center hover:border-[#ff5c35]" onClick={onClick} type="button"><Icon className="mx-auto h-5 w-5" /><span className="mt-2 block text-sm">{label}</span></button>;
 }
 
-function CompaniesTable({ companies, onRefresh }: { companies: Company[]; onRefresh: () => Promise<void> }) {
+function CompaniesTable({ companies, onRefresh, activityFilterOpen, setActivityFilterOpen, activityRange, setActivityRange, activityOperator, setActivityOperator, activityStart, setActivityStart, activityEnd, setActivityEnd }: { companies: Company[]; onRefresh: () => Promise<void>; activityFilterOpen: boolean; setActivityFilterOpen: React.Dispatch<React.SetStateAction<boolean>>; activityRange: DateRangeKey; setActivityRange: (value: DateRangeKey) => void; activityOperator: DateOperator; setActivityOperator: (value: DateOperator) => void; activityStart: string; setActivityStart: (value: string) => void; activityEnd: string; setActivityEnd: (value: string) => void }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#dbe4ed]">
       <table className="w-full min-w-[980px] border-collapse text-left">
@@ -189,7 +250,7 @@ function CompaniesTable({ companies, onRefresh }: { companies: Company[]; onRefr
             <th className="px-4 py-4">Company owner</th>
             <th className="px-4 py-4">Create date <span className="ml-1">↓</span></th>
             <th className="px-4 py-4">Phone number</th>
-            <th className="px-4 py-4">Last activity date</th>
+            <th className="relative px-4 py-4"><button className="inline-flex items-center gap-1" type="button" onClick={() => setActivityFilterOpen((open) => !open)}>Last activity date <ChevronDown className="h-4 w-4" /></button>{activityFilterOpen ? <div className="absolute left-0 top-14 z-30 w-[460px] rounded-2xl border border-[#d0d0d0] bg-white p-6 text-left font-normal shadow-xl"><select className="mb-5 h-10 w-full rounded-lg border border-[#333] bg-white px-3 text-base" value={activityOperator} onChange={(event) => setActivityOperator(event.target.value as DateOperator)}><option value="any-of">is any of</option><option value="between">is between</option><option value="known">is known</option><option value="unknown">is unknown</option></select>{activityOperator === "any-of" ? <select className="h-12 w-full rounded-xl border border-[#333] bg-white px-4 text-base" value={activityRange} onChange={(event) => { setActivityRange(event.target.value as DateRangeKey); setActivityFilterOpen(false); }}><option value="">Select value</option>{dateRangeOptions.map((option) => <option key={option.value} value={option.value}>{option.label} — {option.description}</option>)}</select> : activityOperator === "between" ? <div className="grid grid-cols-2 gap-3"><label className="text-sm font-semibold">From<input className="mt-1 h-11 w-full rounded-lg border border-[#333] px-3 font-normal" type="date" value={activityStart} onChange={(event) => setActivityStart(event.target.value)} /></label><label className="text-sm font-semibold">To<input className="mt-1 h-11 w-full rounded-lg border border-[#333] px-3 font-normal" type="date" value={activityEnd} onChange={(event) => setActivityEnd(event.target.value)} /></label></div> : <p className="text-sm text-[#516f90]">This filter updates the results automatically.</p>}</div> : null}</th>
             <th className="w-14 px-4 py-4 text-right"><Plus className="ml-auto h-5 w-5" /></th>
           </tr>
         </thead>

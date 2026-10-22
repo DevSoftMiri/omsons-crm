@@ -14,4 +14,8 @@ export class CompanyDto {
   @IsOptional() @IsString() parentCompanyId?: string | null;
   @IsOptional() @IsString() ownerId?: string | null;
   @IsOptional() @IsArray() @IsString({ each: true }) regions?: string[];
+  @IsOptional() @IsString() customerType?: string;
+  @IsOptional() @IsString() companySize?: string;
+  @IsOptional() annualRevenue?: number;
+  @IsOptional() customerSince?: string;
 }

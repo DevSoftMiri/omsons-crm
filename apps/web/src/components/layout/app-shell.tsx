@@ -19,7 +19,7 @@ import { useState } from "react";
 
 const navigationItems = [
   ["Contacts", Phone, "/contacts"],
-  ["Companies", Store, "/"],
+  ["Companies", Store, "/companies"],
   ["Deals", CheckSquare, "/deals"],
   ["Segments", CalendarDays, "#"],
   ["Events", CalendarDays, "#"],
@@ -41,15 +41,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4 [scrollbar-color:#5b5f64_transparent] [scrollbar-width:thin]">
-          <a className="mb-4 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-white/85 hover:bg-white/10" href="#">
+          <Link className={`mb-4 flex items-center gap-3 rounded-md px-3 py-2.5 text-sm ${pathname === "/" ? "bg-[#666666] text-white" : "text-white/85 hover:bg-white/10"}`} href="/">
             <Home className="h-4 w-4" />
             Home
-          </a>
+          </Link>
 
           <div className="border-t border-white/25 py-3">
               <div className="space-y-1">
                 {navigationItems.map(([label, Icon, href]) => {
-                  const active = href === "/deals" ? pathname.startsWith("/deals") : href === "/" ? pathname === "/" || pathname.startsWith("/companies") : false;
+                  const active = href === "/deals" ? pathname.startsWith("/deals") : href === "/companies" ? pathname.startsWith("/companies") : false;
                   return (
                     <Link
                       className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${

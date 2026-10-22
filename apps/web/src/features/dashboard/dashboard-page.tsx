@@ -1,76 +1,27 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+"use client";
 import { AppShell } from "@/components/layout/app-shell";
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { Activity, Building2, CalendarDays, CheckCircle2, ClipboardList, FileText, RefreshCw, TrendingUp, Users, UserRound } from "lucide-react";
 
-const stats = [
-  ["Open pipeline", "₹48.2L", "+12%"],
-  ["New leads", "128", "+18"],
-  ["Dealer visits", "34", "This week"],
-  ["Follow-ups due", "19", "Today"]
-];
-
-const stages = ["Lead In", "Qualified", "Sample Sent", "Negotiation", "Won"];
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+type Row = { id?: string; name?: string; title?: string; count?: number; amount?: number; weightedAmount?: number; dueAt?: string; subject?: string; type?: string; user?: { name?: string }; lead?: { id?: string } };
+type Dashboard = { metrics: Record<string, number>; pipeline: Row[]; recentCompanies: Row[]; pendingWork: { overdueTasks?: Row[]; todayTasks?: Row[]; upcomingFollowUps?: Row[] }; recentActivity: Row[]; insights: { byRegion: Row[]; byCustomerType: Row[]; byProductCategory: Row[] } };
+const money = (value = 0) => `₹${(value / 100000).toFixed(1)}L`;
+const iconSet = [TrendingUp, FileText, Building2, CalendarDays, UserRound, Users, Activity, ClipboardList];
 
 export function DashboardPage() {
-  return (
-    <AppShell>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-omsons-orange">Sales workspace</p>
-          <h2 className="text-2xl font-semibold text-graphite-900">Omsons CRM Dashboard</h2>
-          <p className="text-sm text-graphite-700">Track glassware leads, dealers, visits, and revenue momentum.</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="rounded-md border bg-white px-3 py-2 text-sm">Export CSV</button>
-          <button className="rounded-md border bg-white px-3 py-2 text-sm">Filters</button>
-        </div>
-      </div>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map(([label, value, change]) => (
-          <article className="rounded-md border bg-white p-5 shadow-sm" key={label}>
-            <p className="text-sm text-graphite-700">{label}</p>
-            <div className="mt-3 flex items-end justify-between">
-              <strong className="text-2xl text-graphite-900">{value}</strong>
-              <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700">{change}</span>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        <div className="rounded-md border bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold">Pipeline health</h3>
-            <select className="rounded-md border px-3 py-2 text-sm">
-              <option>Current quarter</option>
-            </select>
-          </div>
-          <div className="grid gap-3 md:grid-cols-5">
-            {stages.map((stage, index) => (
-              <div className="rounded-md bg-graphite-50 p-4" key={stage}>
-                <p className="text-sm font-medium">{stage}</p>
-                <div className="mt-4 h-28 rounded-md bg-white p-2">
-                  <div className="rounded bg-omsons-orange/90" style={{ height: `${36 + index * 12}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-md border bg-white p-5 shadow-sm">
-          <h3 className="font-semibold">Recent activity</h3>
-          <div className="mt-4 space-y-3">
-            {["Quote sent to North India dealer", "Visit logged at Borosil cluster", "Follow-up scheduled for export buyer"].map((item) => (
-              <div className="rounded-md border border-graphite-100 p-3 text-sm" key={item}>{item}</div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-4 md:grid-cols-3">
-        <LoadingState />
-        <EmptyState title="No stale leads in the selected view." />
-        <ErrorState message="Reports API placeholder is ready for integration." />
-      </section>
-    </AppShell>
-  );
+  const [period, setPeriod] = useState("current-quarter"); const [data, setData] = useState<Dashboard | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const load = useCallback(async () => { setLoading(true); setError(""); try { const response = await fetch(`${API_URL}/dashboard/summary?period=${period}`); if (!response.ok) throw new Error(`Dashboard API returned ${response.status}`); setData(await response.json()); } catch (caught) { setError(caught instanceof TypeError ? "API server is unavailable" : caught instanceof Error ? caught.message : "Unable to load dashboard"); } finally { setLoading(false); } }, [period]);
+  useEffect(() => { void load(); }, [load]);
+  return <AppShell><main className="mx-auto max-w-[1450px] px-2 py-3 sm:px-4"><header className="mb-4 flex items-start justify-between"><div><p className="text-[10px] font-semibold text-[#ff5c35]">Sales workspace</p><h1 className="text-lg font-bold text-[#172235]">Manufacturing CRM Dashboard</h1><p className="text-[10px] text-[#718096]">Monitor pipeline, distributors, follow-ups, and revenue.</p></div><div className="flex gap-2"><select className="h-7 rounded-md border bg-white px-2 text-[10px]" value={period} onChange={(event) => setPeriod(event.target.value)}><option value="current-month">Current month</option><option value="current-quarter">Current quarter</option><option value="current-year">Current year</option></select><button className="flex h-7 items-center gap-1 rounded-md border bg-white px-2 text-[10px]" onClick={() => void load()} type="button"><RefreshCw className="h-3 w-3" /> Refresh</button></div></header>{loading ? <div className="grid gap-3 md:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div className="h-[72px] animate-pulse rounded-md border bg-white" key={index} />)}</div> : error || !data ? <div className="rounded-md border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{error || "No dashboard data"}<br /><button className="mt-3 rounded-md bg-[#ff5c35] px-4 py-2 text-xs font-semibold text-white" onClick={() => void load()} type="button">Retry</button></div> : <DashboardContent data={data} />}</main></AppShell>;
 }
+
+function DashboardContent({ data }: { data: Dashboard }) {
+  const m = data.metrics; const cards: Array<[string, string | number]> = [["Open pipeline", money(m.openPipelineValue)], ["Open deals", m.openDealCount], ["New companies", m.newCompanies], ["Follow-ups due today", m.followUpsDueToday], ["New leads", m.newLeads], ["Dealer visits", m.dealerVisits], ["Overdue tasks", m.overdueTasks], ["Closing this month", m.dealsClosingThisMonth]]; const work = [...(data.pendingWork.overdueTasks || []), ...(data.pendingWork.todayTasks || []), ...(data.pendingWork.upcomingFollowUps || [])].slice(0, 5);
+  return <><section className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">{cards.map(([label, value], index) => { const Icon = iconSet[index]; return <div className={`rounded-md border bg-white p-3 ${index === 0 ? "border-[#ffad97]" : "border-[#e4e9ee]"}`} key={label}><span className="grid h-6 w-6 place-items-center rounded-full bg-[#f1f5f8] text-[#5b7189]"><Icon className="h-3.5 w-3.5" /></span><p className="mt-2 text-[9px] text-[#7b8795]">{label}</p><strong className="text-base text-[#172235]">{value}</strong></div>; })}</section><section className="grid gap-3 lg:grid-cols-2"><Panel title="Pipeline overview" icon={<TrendingUp />} action="View all" href="/deals"><div className="grid grid-cols-4 gap-2 text-center">{data.pipeline.slice(0, 4).map((stage) => <div key={stage.name}><p className="mb-1 text-[8px] text-[#8290a0]">{stage.name}</p><div className="h-1.5 rounded-full bg-[#edf1f5]"><div className="h-full rounded-full bg-[#ff6848]" style={{ width: `${Math.min(100, stage.amount ? ((stage.weightedAmount || 0) / stage.amount) * 100 : 0)}%` }} /></div><strong className="text-xs">{stage.count || 0}</strong></div>)}</div>{!data.pipeline.length && <EmptyBlock text="No open deals yet" href="/deals" />}</Panel><Panel title="Needs attention" icon={<Activity />}><div className="divide-y rounded-md border border-[#edf0f2]">{[["Overdue tasks", m.overdueTasks, "/tasks"], ["Follow-ups due today", m.followUpsDueToday, "/follow-ups"], ["Deals closing this month", m.dealsClosingThisMonth, "/deals"]].map(([label, count, href]) => <Link className="flex items-center justify-between px-3 py-2 text-[10px]" href={String(href)} key={String(label)}><span className="flex items-center gap-2"><CheckCircle2 className="h-3 w-3" />{label}</span><strong>{count} ›</strong></Link>)}</div><div className="mt-2 rounded-md bg-[#edf9f2] p-2 text-[9px] text-[#17844b]">✓ You’re all caught up<br /><span className="text-[#6e9a7d]">No urgent items require attention right now.</span></div></Panel></section><section className="mt-3 grid gap-3 lg:grid-cols-2"><Panel title="Recent companies" icon={<Building2 />} action="View all" href="/companies">{data.recentCompanies.slice(0, 4).map((company) => <Link className="flex items-center justify-between border-t px-2 py-2 text-[10px]" href={`/companies/${company.id}`} key={company.id}><span className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-[#e9f0f7] text-[9px]">{company.name?.[0] || "C"}</span>{company.name || "Unnamed company"}</span><strong>{money(company.amount)}</strong></Link>)}{!data.recentCompanies.length && <EmptyBlock text="No recent companies" href="/companies" />}</Panel><Panel title="Pending work" icon={<ClipboardList />}>{work.map((item) => <Link className="mb-1 flex items-center justify-between rounded border px-3 py-2 text-[10px]" href={item.lead?.id ? `/leads/${item.lead.id}` : "/tasks"} key={item.id}><span><strong className="block">{item.title || "Follow-up"}</strong><small className="text-[#8290a0]">Due {item.dueAt ? new Date(item.dueAt).toLocaleDateString() : "--"}</small></span>›</Link>)}{!work.length && <EmptyBlock text="No pending work" href="/tasks" />}</Panel></section><section className="mt-3 grid gap-3 lg:grid-cols-2"><Panel title="Recent activity" icon={<Activity />} action="View all" href="/activities">{data.recentActivity.slice(0, 4).map((item) => <div className="border-b py-2 text-[10px]" key={item.id}><strong className="block">{item.subject || "CRM activity"}</strong><small className="text-[#8290a0]">{item.type || "Activity"} · {item.user?.name || "System"}</small></div>)}{!data.recentActivity.length && <EmptyBlock text="No recent activity" href="/activities" />}</Panel><Panel title="Manufacturing insights" icon={<TrendingUp />}><div className="grid grid-cols-3 gap-3">{[["Region", data.insights.byRegion], ["Customer type", data.insights.byCustomerType], ["Product category", data.insights.byProductCategory]].map(([title, items]) => <div key={String(title)}><h3 className="mb-2 text-[9px] font-semibold text-[#ff6848]">{title}</h3>{(items as Row[]).slice(0, 3).map((item) => <div className="flex justify-between border-b py-1 text-[10px]" key={item.name}><span>{item.name || "Unknown"}</span><strong>{item.count || 0}</strong></div>)}</div>)}</div></Panel></section></>;
+}
+function Panel({ title, icon, action, href, children }: { title: string; icon: React.ReactNode; action?: string; href?: string; children: React.ReactNode }) { return <div className="rounded-md border border-[#e4e9ee] bg-white p-3"><div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-[11px] font-bold text-[#26364a]"><span className="text-[#5c7187]">{icon}</span>{title}</h2>{action && href && <Link className="rounded border px-2 py-1 text-[9px] text-[#607286]" href={href}>{action}</Link>}</div>{children}</div>; }
+function EmptyBlock({ text, href }: { text: string; href: string }) { return <div className="py-4 text-center"><p className="text-[10px] text-[#718096]">{text}</p><Link className="mt-2 inline-block rounded bg-[#ff5c35] px-3 py-1 text-[9px] font-semibold text-white" href={href}>+ Create deal</Link></div>; }

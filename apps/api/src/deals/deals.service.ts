@@ -7,6 +7,9 @@ export class DealsService {
 
   list(query: Record<string, string>) {
     const search = query.search?.trim();
+    const allowedSorts = ["name", "amount", "stage", "pipeline", "closeDate", "createdAt", "updatedAt", "priority", "probability", "expectedCloseDate", "productCategory", "lastActivityAt"];
+    const sortBy = allowedSorts.includes(query.sortBy) ? query.sortBy : "createdAt";
+    const sortOrder = query.sortOrder === "asc" ? "asc" : "desc";
     return this.prisma.deal.findMany({
       where: {
         pipeline: query.pipeline || undefined,
@@ -14,8 +17,16 @@ export class DealsService {
         ownerId: query.ownerId || undefined,
         OR: search ? [{ name: { contains: search, mode: "insensitive" } }, { company: { name: { contains: search, mode: "insensitive" } } }] : undefined
       },
-      include: { owner: true, contact: true, company: true },
-      orderBy: { createdAt: "desc" }
+      select: {
+        id: true, name: true, pipeline: true, stage: true, amount: true,
+        closeDate: true, dealType: true, priority: true, ownerId: true, probability: true,
+        expectedCloseDate: true, productCategory: true, stageChangedAt: true, lastActivityAt: true,
+        contactId: true, companyId: true, createdAt: true, updatedAt: true,
+        owner: { select: { id: true, name: true } },
+        contact: { select: { id: true, firstName: true, lastName: true, email: true } },
+        company: { select: { id: true, name: true } }
+      },
+      orderBy: { [sortBy]: sortOrder }
     });
   }
 
@@ -33,7 +44,11 @@ export class DealsService {
 
   private data(body: Record<string, unknown>, partial = false) {
     const data: Record<string, unknown> = {};
-    for (const key of ["name", "pipeline", "stage", "dealType", "priority", "ownerId", "contactId", "companyId"]) if (body[key] !== undefined) data[key] = body[key];
+    for (const key of ["name", "pipeline", "stage", "dealType", "priority", "ownerId", "contactId", "companyId", "productCategory"]) if (body[key] !== undefined) data[key] = body[key];
+    if (body.probability !== undefined) data.probability = body.probability === null || body.probability === "" ? null : Number(body.probability);
+    if (body.expectedCloseDate !== undefined) data.expectedCloseDate = body.expectedCloseDate ? new Date(String(body.expectedCloseDate)) : null;
+    if (body.lastActivityAt !== undefined) data.lastActivityAt = body.lastActivityAt ? new Date(String(body.lastActivityAt)) : null;
+    if (body.stage !== undefined && partial) data.stageChangedAt = new Date();
     if (body.amount !== undefined) data.amount = body.amount === "" || body.amount === null ? null : Number(body.amount);
     if (body.closeDate !== undefined) data.closeDate = body.closeDate ? new Date(String(body.closeDate)) : null;
     if (body.lineItems !== undefined) data.lineItems = body.lineItems;

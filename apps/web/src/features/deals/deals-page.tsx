@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   CalendarDays,
   ChevronDown,
-  ChevronsUpDown,
   Columns3,
   Download,
   IndianRupee,
@@ -28,6 +27,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
+import { sortRecords } from "@/components/ui/sort-records";
 
 type Deal = {
   id: string;
@@ -42,6 +43,11 @@ type Deal = {
   company?: { name: string } | null;
   dealType?: string | null;
   priority?: string;
+  probability?: number | null;
+  expectedCloseDate?: string | null;
+  productCategory?: string | null;
+  stageChangedAt?: string | null;
+  lastActivityAt?: string | null;
 };
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
@@ -54,6 +60,7 @@ const stages = [
   ["Closed Won", "bg-emerald-600 text-white", 100],
   ["Closed Lost", "bg-rose-700 text-white", 0],
 ] as const;
+const dealSortOptions = [{ value: "name", label: "Deal name" }, { value: "amount", label: "Deal amount" }, { value: "stage", label: "Deal stage" }, { value: "owner", label: "Deal owner" }, { value: "createdAt", label: "Create date" }, { value: "lastActivityAt", label: "Last activity date" }, { value: "closeDate", label: "Close date" }, { value: "expectedCloseDate", label: "Expected close date" }, { value: "priority", label: "Deal priority" }, { value: "pipeline", label: "Pipeline" }, { value: "dealType", label: "Deal type" }, { value: "company", label: "Company name" }, { value: "contact", label: "Contact name" }, { value: "probability", label: "Probability" }, { value: "weightedAmount", label: "Weighted deal value" }, { value: "daysInStage", label: "Days in current stage" }];
 
 export function DealsPage() {
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
@@ -66,6 +73,8 @@ export function DealsPage() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [sortBy, setSortBy] = useState("name"); const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const loadDeals = async () => {
     try {
@@ -82,6 +91,7 @@ export function DealsPage() {
   useEffect(() => {
     void loadDeals();
   }, []);
+  const sortedDeals = sortRecords(deals, sortBy, sortDirection, (deal, key) => key === "owner" ? deal.owner?.name : key === "company" ? deal.company?.name : key === "contact" ? `${deal.contact?.firstName ?? ""} ${deal.contact?.lastName ?? ""}` : key === "weightedAmount" ? (deal.amount ?? 0) * ((deal.probability ?? 0) / 100) : key === "daysInStage" ? deal.stageChangedAt ? Date.now() - new Date(deal.stageChangedAt).getTime() : null : deal[key as keyof Deal]);
 
   return (
     <AppShell>
@@ -165,18 +175,15 @@ export function DealsPage() {
                 placeholder="Search deals..."
               />
             </label>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full border border-[#dbe4ed] bg-[#f7f9fb] px-4 text-sm font-medium">
+            <button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#dbe4ed] bg-[#f7f9fb]"}`} onClick={() => setFiltersVisible((visible) => !visible)} type="button">
               <Filter className="h-4 w-4" />
               Filter
             </button>
-            <button className="inline-flex h-10 items-center gap-2 rounded-full border border-[#dbe4ed] bg-white px-4 text-sm font-medium">
-              <ChevronsUpDown className="h-4 w-4" />
-              Sort by <ChevronDown className="h-4 w-4" />
-            </button>
+            <SortMenu options={dealSortOptions} value={sortBy} direction={sortDirection} onChange={(value, direction) => { setSortBy(value); setSortDirection(direction); }} />
             <span className="h-8 w-px bg-[#dbe4ed]" />
             <CircleButton icon={Plus} label="Add property" />
             <CircleButton icon={Columns3} label="Edit columns" />
-            <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]">
+            <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]" onClick={() => setFiltersVisible(true)} type="button">
               <Filter className="h-4 w-4" />
               Advanced filters
             </button>
@@ -191,7 +198,7 @@ export function DealsPage() {
           </div>
         </div>
 
-        <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
+        {filtersVisible ? <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
           {[
             "Deal owner",
             "Create date",
@@ -216,18 +223,20 @@ export function DealsPage() {
               ) : null}
             </div>
           ))}
-        </div>
+        </div> : null}
+
+        {deals.length === 0 ? <DealsEmptyState onCreateDeal={() => setCreateOpen(true)} /> : null}
 
         {viewMode === "board" ? (
           <DealsBoard
-            deals={deals}
+            deals={sortedDeals}
             onCreateDeal={() => setCreateOpen(true)}
             onCreateTask={() => setTaskOpen(true)}
             onCreateNote={() => setNoteOpen(true)}
             onDealsChange={setDeals}
           />
         ) : (
-          <DealsTableEmpty deals={deals} />
+          <DealsTableEmpty deals={sortedDeals} />
         )}
 
         <div className="flex items-center justify-between border-t border-[#dbe4ed] px-2 py-3">
@@ -265,9 +274,13 @@ export function DealsPage() {
                 setCreateError(await response.text());
                 return;
               }
+              const createdDeal = (await response.json()) as Deal;
+              // Update the local list immediately so the empty state disappears
+              // as soon as the first deal is successfully created.
+              setDeals((currentDeals) => [createdDeal, ...currentDeals]);
+              setDealCount((count) => count + 1);
               setCreateOpen(false);
               setDealName("");
-              await loadDeals();
             } catch (error) {
               setCreateError(
                 error instanceof Error
@@ -570,40 +583,29 @@ function DealsBoard({
           </div>
         ))}
       </div>
-      {deals.length === 0 ? (
-        <section className="relative overflow-hidden rounded-xl border border-[#f3d8cb] bg-[#fffaf7] px-5 py-12 text-center">
-        <div className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
-        <div className="pointer-events-none absolute -bottom-28 -right-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
-        <Image
-          className="mx-auto object-contain"
-          src="/Omsons Logo.png"
-          alt="Omsons logo"
-          width={180}
-          height={120}
-          priority
-        />
-        <h2 className="mt-5 text-2xl font-bold text-[#111827]">
-          Build a winning sales process
-        </h2>
-        <p className="mx-auto mt-2 max-w-xl text-base leading-7 text-[#516f90]">
-          Use Deals to track opportunities across your custom sales pipeline and
-          report on your revenue.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <button
-            className="rounded-full bg-[#005c5f] px-8 py-3 text-sm font-bold text-white"
-            onClick={onCreateDeal}
-            type="button"
-          >
-            Add deal
-          </button>
-          <button className="rounded-full border border-[#9fb3c8] bg-white px-8 py-3 text-sm font-bold">
-            Import data from a file
-          </button>
-        </div>
-        </section>
-      ) : null}
     </>
+  );
+}
+
+function DealsEmptyState({ onCreateDeal }: { onCreateDeal: () => void }) {
+  return (
+    <section className="relative mb-4 overflow-hidden rounded-xl border border-[#f3d8cb] bg-[#fffaf7] px-5 py-12 text-center">
+      <div className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
+      <div className="pointer-events-none absolute -bottom-28 -right-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
+      <Image className="mx-auto object-contain" src="/Omsons Logo.png" alt="Omsons logo" width={180} height={120} priority />
+      <h2 className="mt-5 text-2xl font-bold text-[#111827]">Build a winning sales process</h2>
+      <p className="mx-auto mt-2 max-w-xl text-base leading-7 text-[#516f90]">
+        Use Deals to track opportunities across your custom sales pipeline and report on your revenue.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <button className="rounded-full bg-[#005c5f] px-8 py-3 text-sm font-bold text-white" onClick={onCreateDeal} type="button">
+          Add deal
+        </button>
+        <button className="rounded-full border border-[#9fb3c8] bg-white px-8 py-3 text-sm font-bold">
+          Import data from a file
+        </button>
+      </div>
+    </section>
   );
 }
 

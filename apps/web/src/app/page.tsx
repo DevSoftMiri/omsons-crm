@@ -1,5 +1,5 @@
-import { CompaniesListPage } from "@/features/companies/companies-list-page";
+import { HomePage } from "@/features/home/home-page";
 
 export default function Page() {
-  return <CompaniesListPage />;
+  return <HomePage />;
 }

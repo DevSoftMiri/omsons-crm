@@ -10,7 +10,7 @@ export class CompaniesService {
 
   private normalize(dto: CompanyDto) {
     const regions = [...new Set((dto.regions ?? []).map((region) => region.trim()).filter(Boolean))];
-    return { ...dto, name: dto.name.trim(), regions, parentCompanyId: dto.parentCompanyId || null };
+    return { ...dto, name: dto.name.trim(), regions, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null };
   }
 
   private async validateParent(id: string | undefined, parentCompanyId: string | null) {
@@ -26,8 +26,23 @@ export class CompaniesService {
   async list(query: Record<string, string | undefined>) {
     const page = Math.max(1, Number(query.page) || 1); const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
     const search = query.search?.trim(); const archived = query.archived === "true";
+    const allowedSorts = ["name", "createdAt", "updatedAt", "industry", "city", "state", "country", "customerType", "companySize", "annualRevenue", "customerSince"];
+    const sortBy = allowedSorts.includes(query.sortBy ?? "") ? query.sortBy! : "name";
+    const sortOrder = query.sortOrder === "desc" ? "desc" : "asc";
     const where = { isArchived: archived, ...(query.industry ? { industry: query.industry } : {}), ...(query.country ? { country: query.country } : {}), ...(query.parentCompanyId ? { parentCompanyId: query.parentCompanyId } : {}), ...(query.region ? { regions: { has: query.region } } : {}), ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { website: { contains: search, mode: "insensitive" as const } }, { city: { contains: search, mode: "insensitive" as const } }, { state: { contains: search, mode: "insensitive" as const } }] } : {}) };
-    const [data, total] = await this.prisma.$transaction([this.prisma.company.findMany({ where, include: this.include, orderBy: { name: "asc" }, skip: (page - 1) * limit, take: limit }), this.prisma.company.count({ where })]);
+    const [data, total] = await this.prisma.$transaction([this.prisma.company.findMany({
+      where,
+      select: {
+        id: true, name: true, industry: true, website: true, phone: true,
+        city: true, state: true, country: true, regions: true,
+        customerType: true, companySize: true, annualRevenue: true, customerSince: true,
+        parentCompanyId: true, ownerId: true, isArchived: true,
+        createdAt: true, updatedAt: true,
+        owner: { select: { id: true, name: true } }
+        , contacts: { select: { leadStatus: true } }
+      },
+      orderBy: { [sortBy]: sortOrder }, skip: (page - 1) * limit, take: limit
+    }), this.prisma.company.count({ where })]);
     return { data, page, limit, total, totalPages: Math.ceil(total / limit) };
   }
 
@@ -76,7 +91,7 @@ export class CompaniesService {
   async addContact(companyId: string, body: Record<string, unknown>) {
     await this.findOne(companyId);
     if (typeof body.firstName !== "string" || !body.firstName.trim()) throw new BadRequestException("First name is required");
-    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email: typeof body.email === "string" ? body.email.trim() || null : null, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, ownerId: typeof body.ownerId === "string" ? body.ownerId || null : null, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, companyId } });
+    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email: typeof body.email === "string" ? body.email.trim() || null : null, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, ownerId: typeof body.ownerId === "string" ? body.ownerId || null : null, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, lastContactedAt: body.lastContactedAt ? new Date(String(body.lastContactedAt)) : null, nextFollowUpAt: body.nextFollowUpAt ? new Date(String(body.nextFollowUpAt)) : null, contactSource: typeof body.contactSource === "string" ? body.contactSource || null : null, companyId } });
   }
 
   async listContacts(companyId: string) {

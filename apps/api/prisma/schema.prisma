@@ -114,6 +114,10 @@ model Company {
   state           String?
   country         String    @default("India")
   regions         String[]  @default([])
+  customerType    String?
+  companySize     String?
+  annualRevenue   Decimal?  @db.Decimal(14, 2)
+  customerSince   DateTime?
   parentCompanyId String?
   ownerId         String?
   owner           User?     @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -132,6 +136,9 @@ model Company {
   @@index([parentCompanyId])
   @@index([ownerId])
   @@index([isArchived])
+  @@index([customerType])
+  @@index([companySize])
+  @@index([customerSince])
 }
 
 model Contact {
@@ -145,6 +152,9 @@ model Contact {
   owner     User?      @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   lifecycleStage String?
   leadStatus String?
+  lastContactedAt DateTime?
+  nextFollowUpAt DateTime?
+  contactSource String?
   companyId String?
   company   Company?   @relation(fields: [companyId], references: [id])
   leads     Lead[]
@@ -160,6 +170,9 @@ model Contact {
   @@index([ownerId])
   @@index([lifecycleStage])
   @@index([leadStatus])
+  @@index([lastContactedAt])
+  @@index([nextFollowUpAt])
+  @@index([contactSource])
 }
 
 model Dealer {
@@ -234,6 +247,11 @@ model Deal {
   closeDate       DateTime?
   dealType        String?
   priority        Priority  @default(MEDIUM)
+  probability     Int?
+  expectedCloseDate DateTime?
+  productCategory String?
+  stageChangedAt  DateTime? 
+  lastActivityAt  DateTime?
   ownerId         String?
   owner           User?     @relation("DealOwner", fields: [ownerId], references: [id])
   contactId       String?
@@ -248,6 +266,11 @@ model Deal {
   @@index([ownerId])
   @@index([closeDate])
   @@index([createdAt])
+  @@index([probability])
+  @@index([expectedCloseDate])
+  @@index([productCategory])
+  @@index([stageChangedAt])
+  @@index([lastActivityAt])
 }
 
 model Activity {
