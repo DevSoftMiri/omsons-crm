@@ -18,4 +18,9 @@ export class CompanyDto {
   @IsOptional() @IsString() companySize?: string;
   @IsOptional() annualRevenue?: number;
   @IsOptional() customerSince?: string;
+  @IsOptional() targetAccount?: boolean;
+  @IsOptional() @IsString() idealCustomerProfileTier?: string;
+  @IsOptional() numberOfBlockers?: number;
+  @IsOptional() numberOfBuyingRoleContacts?: number;
+  @IsOptional() numberOfDecisionMakers?: number;
 }

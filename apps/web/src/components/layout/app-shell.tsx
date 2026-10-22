@@ -21,7 +21,7 @@ const navigationItems = [
   ["Contacts", Phone, "/contacts"],
   ["Companies", Store, "/companies"],
   ["Deals", CheckSquare, "/deals"],
-  ["Segments", CalendarDays, "#"],
+  ["Segments", CalendarDays, "/segments"],
   ["Events", CalendarDays, "#"],
   ["Ads", Bell, "#"],
   ["Buyer Intent", Store, "#"],
@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="border-t border-white/25 py-3">
               <div className="space-y-1">
                 {navigationItems.map(([label, Icon, href]) => {
-                  const active = href === "/deals" ? pathname.startsWith("/deals") : href === "/companies" ? pathname.startsWith("/companies") : false;
+                  const active = href === "/deals" ? pathname.startsWith("/deals") : href === "/companies" ? pathname.startsWith("/companies") : href === "/segments" ? pathname.startsWith("/segments") : false;
                   return (
                     <Link
                       className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${

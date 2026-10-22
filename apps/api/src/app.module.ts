@@ -15,6 +15,9 @@ import { CompaniesModule } from "./companies/companies.module";
 import { HealthController } from "./health.controller";
 import { DashboardController } from "./dashboard/dashboard.controller";
 import { DashboardService } from "./dashboard/dashboard.service";
+import { SegmentsModule } from "./segments/segments.module";
+import { SegmentsController } from "./segments/segments.controller";
+import { SegmentsService } from "./segments/segments.service";
 
 const crmCrudModules = [
   ["RolesModule", "roles"],
@@ -58,15 +61,17 @@ const queueModules = queueEnabled ? [
     UsersModule,
     DealsModule,
     CompaniesModule,
+    SegmentsModule,
     AuditLogsModule,
     ...queueModules,
     ...crmCrudModules
   ],
-  controllers: [HealthController, DashboardController],
+  controllers: [HealthController, DashboardController, SegmentsController],
   providers: [
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
-    DashboardService
+    DashboardService,
+    SegmentsService
   ]
 })
 export class AppModule {}

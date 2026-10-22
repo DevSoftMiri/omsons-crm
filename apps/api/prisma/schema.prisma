@@ -51,6 +51,7 @@ model User {
   tasks             Task[]
   followUps         FollowUp[]
   visits            Visit[]
+  createdSegments   Segment[]  @relation("SegmentCreator")
   auditLogs         AuditLog[] @relation("AuditActor")
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -118,6 +119,11 @@ model Company {
   companySize     String?
   annualRevenue   Decimal?  @db.Decimal(14, 2)
   customerSince   DateTime?
+  targetAccount   Boolean   @default(false)
+  idealCustomerProfileTier String?
+  numberOfBlockers Int       @default(0)
+  numberOfBuyingRoleContacts Int @default(0)
+  numberOfDecisionMakers Int   @default(0)
   parentCompanyId String?
   ownerId         String?
   owner           User?     @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -359,6 +365,30 @@ model Report {
   filters   Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum SegmentObject {
+  COMPANY
+  CONTACT
+  DEAL
+}
+
+model Segment {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  objectType  SegmentObject
+  filters     Json          @default("{}")
+  isDeleted   Boolean       @default(false)
+  createdById String?
+  createdBy   User?         @relation("SegmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([objectType])
+  @@index([isDeleted])
+  @@index([createdById])
+  @@index([updatedAt])
 }
 
 model FileAsset {
