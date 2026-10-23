@@ -13,8 +13,7 @@ import { AuditLogInterceptor } from "./common/interceptors/audit-log.interceptor
 import { DealsModule } from "./deals/deals.module";
 import { CompaniesModule } from "./companies/companies.module";
 import { HealthController } from "./health.controller";
-import { DashboardController } from "./dashboard/dashboard.controller";
-import { DashboardService } from "./dashboard/dashboard.service";
+import { DashboardModule } from "./dashboard/dashboard.module";
 import { SegmentsModule } from "./segments/segments.module";
 import { SegmentsController } from "./segments/segments.controller";
 import { SegmentsService } from "./segments/segments.service";
@@ -62,15 +61,15 @@ const queueModules = queueEnabled ? [
     DealsModule,
     CompaniesModule,
     SegmentsModule,
+    DashboardModule,
     AuditLogsModule,
     ...queueModules,
     ...crmCrudModules
   ],
-  controllers: [HealthController, DashboardController, SegmentsController],
+  controllers: [HealthController, SegmentsController],
   providers: [
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
-    DashboardService,
     SegmentsService
   ]
 })
