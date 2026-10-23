@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createApp } from "../../../src/bootstrap";
+import { createApp } from "../../src/bootstrap";
 
 let handler: ((req: VercelRequest, res: VercelResponse) => void) | undefined;
 
