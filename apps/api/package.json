@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate && nest build",
+    "vercel-build": "prisma generate && tsc -p tsconfig.json --outDir dist --noEmit false",
     "render-build": "prisma generate && tsc -p tsconfig.json --outDir dist --noEmit false",
     "dev": "nest start --watch",
     "build": "nest build",
