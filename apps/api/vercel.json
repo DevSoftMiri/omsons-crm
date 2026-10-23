@@ -5,6 +5,9 @@
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 30
+    },
+    "api/dashboard/summary.ts": {
+      "maxDuration": 30
     }
   }
 }

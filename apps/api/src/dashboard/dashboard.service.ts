@@ -18,7 +18,7 @@ export class DashboardService {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const baseDeal = { pipeline: query.pipeline || undefined, ownerId: query.ownerId || undefined, company: query.region ? { regions: { has: query.region } } : undefined };
     const openDealWhere = { ...baseDeal, stage: { notIn: ["Closed Won", "Closed Lost"] } };
-    const [openDeals, newLeads, newCompanies, visits, tasks, followUps, closingDeals, recentCompanies, activities] = await Promise.all([
+    const dashboardQueries = await Promise.allSettled([
       db.deal.findMany({ where: openDealWhere, select: { id: true, name: true, stage: true, amount: true, probability: true, closeDate: true, expectedCloseDate: true, productCategory: true, stageChangedAt: true, updatedAt: true, owner: { select: { id: true, name: true } }, company: { select: { id: true, name: true, regions: true, customerType: true } }, contact: { select: { id: true, firstName: true, lastName: true } } } }),
       db.lead.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined } }),
       db.company.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined, regions: query.region ? { has: query.region } : undefined } }),
@@ -29,6 +29,14 @@ export class DashboardService {
       db.company.findMany({ where: { isArchived: false, ownerId: query.ownerId || undefined, regions: query.region ? { has: query.region } : undefined }, orderBy: { updatedAt: "desc" }, take: 8, select: { id: true, name: true, regions: true, customerType: true, updatedAt: true, owner: { select: { id: true, name: true } }, deals: { where: { stage: { notIn: ["Closed Won", "Closed Lost"] } }, select: { amount: true } } } }),
       db.activity.findMany({ orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } }, lead: { select: { id: true, title: true } } } }),
     ]);
+    const failedQueries = dashboardQueries.filter((query) => query.status === "rejected");
+    if (failedQueries.length) {
+      console.error("Dashboard query failures", failedQueries.map((query) => query.reason));
+    }
+    const fallbackValues = [[], 0, 0, 0, [], [], [], [], []];
+    const [openDeals, newLeads, newCompanies, visits, tasks, followUps, closingDeals, recentCompanies, activities] = dashboardQueries.map((query, index) => (
+      query.status === "fulfilled" ? query.value : fallbackValues[index]
+    )) as [any[], number, number, number, any[], any[], any[], any[], any[]];
     const today = new Date(now); today.setHours(0, 0, 0, 0); const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
     const overdueTasks = tasks.filter((task: any) => task.dueAt && new Date(task.dueAt) < today);
     const todayTasks = tasks.filter((task: any) => task.dueAt && new Date(task.dueAt) >= today && new Date(task.dueAt) < tomorrow);
