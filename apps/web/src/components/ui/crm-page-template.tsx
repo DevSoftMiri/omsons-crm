@@ -8,7 +8,7 @@ export function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 export function CrmPageFrame({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <main className={cn("mx-auto max-w-[1500px] rounded-xl border border-[#e4e8ed] bg-white p-3 shadow-[0_8px_30px_rgba(33,51,67,0.08)]", className)}>{children}</main>;
+  return <main className={cn("mx-auto max-w-[1500px] overflow-x-hidden rounded-xl border border-[#e4e8ed] bg-white p-3 shadow-[0_8px_30px_rgba(33,51,67,0.08)]", className)}>{children}</main>;
 }
 
 export function CrmCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {

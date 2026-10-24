@@ -108,12 +108,19 @@ model RolePermission {
 model Company {
   id              String    @id @default(cuid())
   name            String
+  domainName      String?
   industry        String?
   website         String?
   phone           String?
   city            String?
   state           String?
+  postalCode      String?
   country         String    @default("India")
+  numberOfEmployees Int?
+  timeZone        String?
+  description     String?
+  linkedinCompanyPage String?
+  customFields     Json      @default("{}")
   regions         String[]  @default([])
   customerType    String?
   companySize     String?
@@ -154,6 +161,8 @@ model Contact {
   email     String?
   phone     String?
   title     String?
+  department String?
+  roleInPurchase String?
   ownerId   String?
   owner     User?      @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   lifecycleStage String?

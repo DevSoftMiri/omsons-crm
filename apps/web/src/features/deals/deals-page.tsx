@@ -26,7 +26,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
 import { sortRecords } from "@/components/ui/sort-records";
 
@@ -49,6 +49,31 @@ type Deal = {
   stageChangedAt?: string | null;
   lastActivityAt?: string | null;
 };
+type CatalogVariant = {
+  id: string;
+  sku: string;
+  name: string;
+  price?: number;
+  priceLabel?: string;
+  pack?: number;
+  inStock?: boolean;
+};
+type CatalogProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  category?: string;
+  variants?: CatalogVariant[];
+};
+type DealLineItem = {
+  productId: string;
+  productName: string;
+  variantId: string;
+  variantSku: string;
+  unitPrice: number;
+  quantity: number;
+  total: number;
+};
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 const stages = [
@@ -60,7 +85,24 @@ const stages = [
   ["Closed Won", "bg-emerald-600 text-white", 100],
   ["Closed Lost", "bg-rose-700 text-white", 0],
 ] as const;
-const dealSortOptions = [{ value: "name", label: "Deal name" }, { value: "amount", label: "Deal amount" }, { value: "stage", label: "Deal stage" }, { value: "owner", label: "Deal owner" }, { value: "createdAt", label: "Create date" }, { value: "lastActivityAt", label: "Last activity date" }, { value: "closeDate", label: "Close date" }, { value: "expectedCloseDate", label: "Expected close date" }, { value: "priority", label: "Deal priority" }, { value: "pipeline", label: "Pipeline" }, { value: "dealType", label: "Deal type" }, { value: "company", label: "Company name" }, { value: "contact", label: "Contact name" }, { value: "probability", label: "Probability" }, { value: "weightedAmount", label: "Weighted deal value" }, { value: "daysInStage", label: "Days in current stage" }];
+const dealSortOptions = [
+  { value: "name", label: "Deal name" },
+  { value: "amount", label: "Deal amount" },
+  { value: "stage", label: "Deal stage" },
+  { value: "owner", label: "Deal owner" },
+  { value: "createdAt", label: "Create date" },
+  { value: "lastActivityAt", label: "Last activity date" },
+  { value: "closeDate", label: "Close date" },
+  { value: "expectedCloseDate", label: "Expected close date" },
+  { value: "priority", label: "Deal priority" },
+  { value: "pipeline", label: "Pipeline" },
+  { value: "dealType", label: "Deal type" },
+  { value: "company", label: "Company name" },
+  { value: "contact", label: "Contact name" },
+  { value: "probability", label: "Probability" },
+  { value: "weightedAmount", label: "Weighted deal value" },
+  { value: "daysInStage", label: "Days in current stage" },
+];
 
 export function DealsPage() {
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
@@ -75,7 +117,8 @@ export function DealsPage() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [createError, setCreateError] = useState("");
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [sortBy, setSortBy] = useState("name"); const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const loadDeals = async () => {
     try {
@@ -92,7 +135,21 @@ export function DealsPage() {
   useEffect(() => {
     void loadDeals();
   }, []);
-  const sortedDeals = sortRecords(deals, sortBy, sortDirection, (deal, key) => key === "owner" ? deal.owner?.name : key === "company" ? deal.company?.name : key === "contact" ? `${deal.contact?.firstName ?? ""} ${deal.contact?.lastName ?? ""}` : key === "weightedAmount" ? (deal.amount ?? 0) * ((deal.probability ?? 0) / 100) : key === "daysInStage" ? deal.stageChangedAt ? Date.now() - new Date(deal.stageChangedAt).getTime() : null : deal[key as keyof Deal]);
+  const sortedDeals = sortRecords(deals, sortBy, sortDirection, (deal, key) =>
+    key === "owner"
+      ? deal.owner?.name
+      : key === "company"
+        ? deal.company?.name
+        : key === "contact"
+          ? `${deal.contact?.firstName ?? ""} ${deal.contact?.lastName ?? ""}`
+          : key === "weightedAmount"
+            ? (deal.amount ?? 0) * ((deal.probability ?? 0) / 100)
+            : key === "daysInStage"
+              ? deal.stageChangedAt
+                ? Date.now() - new Date(deal.stageChangedAt).getTime()
+                : null
+              : deal[key as keyof Deal],
+  );
 
   return (
     <AppShell>
@@ -176,15 +233,31 @@ export function DealsPage() {
                 placeholder="Search deals..."
               />
             </label>
-            <button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#dbe4ed] bg-[#f7f9fb]"}`} onClick={() => setFiltersVisible((visible) => !visible)} type="button">
+            <button
+              className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#dbe4ed] bg-[#f7f9fb]"}`}
+              onClick={() => setFiltersVisible((visible) => !visible)}
+              type="button"
+            >
               <Filter className="h-4 w-4" />
               Filter
             </button>
-            <SortMenu options={dealSortOptions} value={sortBy} direction={sortDirection} onChange={(value, direction) => { setSortBy(value); setSortDirection(direction); }} />
+            <SortMenu
+              options={dealSortOptions}
+              value={sortBy}
+              direction={sortDirection}
+              onChange={(value, direction) => {
+                setSortBy(value);
+                setSortDirection(direction);
+              }}
+            />
             <span className="h-8 w-px bg-[#dbe4ed]" />
             <CircleButton icon={Plus} label="Add property" />
             <CircleButton icon={Columns3} label="Edit columns" />
-            <button className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]" onClick={() => setFiltersVisible(true)} type="button">
+            <button
+              className="inline-flex h-10 items-center gap-2 px-3 text-sm font-bold text-[#213343]"
+              onClick={() => setFiltersVisible(true)}
+              type="button"
+            >
               <Filter className="h-4 w-4" />
               Advanced filters
             </button>
@@ -199,34 +272,38 @@ export function DealsPage() {
           </div>
         </div>
 
-        {filtersVisible ? <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
-          {[
-            "Deal owner",
-            "Create date",
-            "Last activity date",
-            "Close date",
-          ].map((property) => (
-            <div className="relative" key={property}>
-              <button
-                className="inline-flex items-center gap-1"
-                onClick={() =>
-                  setActiveProperty(
-                    activeProperty === property ? null : property,
-                  )
-                }
-                type="button"
-              >
-                {property}
-                <ChevronDown className="h-3 w-3" />
-              </button>
-              {activeProperty === property ? (
-                <PropertyFilter property={property} />
-              ) : null}
-            </div>
-          ))}
-        </div> : null}
+        {filtersVisible ? (
+          <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
+            {[
+              "Deal owner",
+              "Create date",
+              "Last activity date",
+              "Close date",
+            ].map((property) => (
+              <div className="relative" key={property}>
+                <button
+                  className="inline-flex items-center gap-1"
+                  onClick={() =>
+                    setActiveProperty(
+                      activeProperty === property ? null : property,
+                    )
+                  }
+                  type="button"
+                >
+                  {property}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {activeProperty === property ? (
+                  <PropertyFilter property={property} />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-        {deals.length === 0 ? <DealsEmptyState onCreateDeal={() => setCreateOpen(true)} /> : null}
+        {deals.length === 0 ? (
+          <DealsEmptyState onCreateDeal={() => setCreateOpen(true)} />
+        ) : null}
 
         {viewMode === "board" ? (
           <DealsBoard
@@ -265,13 +342,26 @@ export function DealsPage() {
             setCreateError("");
             setCreateOpen(false);
           }}
-          onCreate={async () => {
+          onCreate={async (lineItems) => {
             if (!dealName.trim()) return;
             try {
+              const lineItemsTotal = lineItems.reduce(
+                (total, item) => total + item.total,
+                0,
+              );
               const response = await fetch(`${API_URL}/deals`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: dealName.trim(), amount: dealAmount === "" ? null : Number(dealAmount) }),
+                body: JSON.stringify({
+                  name: dealName.trim(),
+                  amount:
+                    lineItems.length > 0
+                      ? lineItemsTotal
+                      : dealAmount === ""
+                        ? null
+                        : Number(dealAmount),
+                  lineItems,
+                }),
               });
               if (!response.ok) {
                 setCreateError(await response.text());
@@ -314,29 +404,109 @@ function CreateDealModal({
   dealAmount: string;
   setDealAmount: (value: string) => void;
   onCancel: () => void;
-  onCreate: () => void;
+  onCreate: (lineItems: DealLineItem[]) => void;
   error?: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<{
+    product: CatalogProduct;
+    variant: CatalogVariant;
+  } | null>(null);
+  const [quantity, setQuantity] = useState("1");
+  const [lineItems, setLineItems] = useState<DealLineItem[]>([]);
+  const [lineItemError, setLineItemError] = useState("");
+  const lineItemRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    fetch("/omsons_catalog_2026-27.json")
+      .then((response) => response.json())
+      .then((data: CatalogProduct[] | { products?: CatalogProduct[] }) =>
+        setCatalog(Array.isArray(data) ? data : (data.products ?? [])),
+      )
+      .catch(() => setCatalog([]));
+  }, []);
+  useEffect(() => {
+    const close = (event: MouseEvent) => {
+      if (
+        lineItemRef.current &&
+        !lineItemRef.current.contains(event.target as Node)
+      ) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+  const matches = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) return [];
+    return catalog
+      .filter((product) =>
+        `${product.name} ${product.sku} ${(product.variants ?? []).map((item) => item.sku).join(" ")}`
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 8);
+  }, [catalog, productSearch]);
+  const unitPrice =
+    selectedVariant?.variant.price ??
+    Number(selectedVariant?.variant.priceLabel ?? 0);
+  const parsedQuantity = Number(quantity);
+  const lineTotal = unitPrice * parsedQuantity;
+  const addLineItem = () => {
+    if (
+      !selectedVariant ||
+      !Number.isInteger(parsedQuantity) ||
+      parsedQuantity < 1
+    ) {
+      setLineItemError(
+        "Select a product variant and enter a quantity of at least 1.",
+      );
+      return;
+    }
+    setLineItems((current) => [
+      ...current,
+      {
+        productId: selectedVariant.product.id,
+        productName: selectedVariant.product.name,
+        variantId: selectedVariant.variant.id,
+        variantSku: selectedVariant.variant.sku,
+        unitPrice,
+        quantity: parsedQuantity,
+        total: lineTotal,
+      },
+    ]);
+    setSelectedVariant(null);
+    setProductSearch("");
+    setQuantity("1");
+    setSuggestionsOpen(false);
+    setLineItemError("");
+  };
+  const money = (value: number) =>
+    `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
   const field = (label: string, children: React.ReactNode) => (
     <label className="block text-sm font-semibold text-[#213343]">
       <span className="mb-1.5 block">{label}</span>
       {children}
     </label>
-  );                                         
+  );
   const input =
     "h-10 w-full rounded-lg border border-[#b8c5d1] bg-white px-3 text-sm outline-none focus:border-[#005c5f]";
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      onMouseDown={onCancel}
       role="dialog"
       aria-modal="true"
     >
       <form
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
-          onCreate();
+          onCreate(lineItems);
         }}
       >
         <div className="flex items-center justify-between border-b border-[#e1e7ed] px-6 py-4">
@@ -393,7 +563,16 @@ function CreateDealModal({
               <option>Presentation Scheduled</option>
             </select>,
           )}
-          {field("Amount", <input className={input} min="0" type="number" value={dealAmount} onChange={(event) => setDealAmount(event.target.value)} />)}
+          {field(
+            "Amount",
+            <input
+              className={input}
+              min="0"
+              type="number"
+              value={dealAmount}
+              onChange={(event) => setDealAmount(event.target.value)}
+            />,
+          )}
           {field("Close date", <input className={input} type="date" />)}
           {field(
             "Deal owner",
@@ -435,21 +614,132 @@ function CreateDealModal({
           </div>
           <div className="sm:col-span-2">
             <h3 className="mb-3 text-sm font-bold">Add line item</h3>
-            <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
-              <input className={input} placeholder="Add a line item" />
+            <div
+              className="grid gap-3 sm:grid-cols-[1fr_120px_auto]"
+              ref={lineItemRef}
+            >
+              <div className="relative">
+                <input
+                  className={input}
+                  placeholder="Search product or SKU"
+                  value={productSearch}
+                  onChange={(event) => {
+                    setProductSearch(event.target.value);
+                    setSelectedVariant(null);
+                    setSuggestionsOpen(true);
+                  }}
+                  onFocus={() => setSuggestionsOpen(true)}
+                />
+                {suggestionsOpen && matches.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">
+                    {matches.map((product) => (
+                      <div key={product.id}>
+                        <p className="px-3 py-2 text-xs font-bold text-[#718096]">
+                          {product.name} · {product.sku}
+                        </p>
+                        {(product.variants ?? []).map((variant) => (
+                          <button
+                            className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-[#f2f7fa]"
+                            key={variant.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVariant({ product, variant });
+                              setProductSearch(
+                                `${product.name} · ${variant.sku}`,
+                              );
+                              setSuggestionsOpen(false);
+                              setLineItemError("");
+                            }}
+                          >
+                            <span>
+                              {variant.sku}
+                              {variant.pack ? ` · Pack ${variant.pack}` : ""}
+                            </span>
+                            <span className="font-semibold">
+                              {money(
+                                variant.price ??
+                                  Number(variant.priceLabel ?? 0),
+                              )}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <input
                 className={input}
                 min="1"
                 placeholder="Quantity"
                 type="number"
+                value={quantity}
+                onChange={(event) => setQuantity(event.target.value)}
               />
               <button
-                className="rounded-lg border border-[#b8c5d1] px-4 text-sm font-semibold"
+                className="rounded-lg border border-[#b8c5d1] px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  !selectedVariant ||
+                  !Number.isInteger(parsedQuantity) ||
+                  parsedQuantity < 1
+                }
+                onClick={addLineItem}
                 type="button"
               >
                 Add
               </button>
             </div>
+            {selectedVariant ? (
+              <p className="mt-2 text-sm text-[#516f90]">
+                Unit price: <strong>{money(unitPrice)}</strong> · Amount:{" "}
+                <strong>{money(lineTotal)}</strong>
+              </p>
+            ) : null}
+            {lineItemError ? (
+              <p className="mt-2 text-sm text-red-600">{lineItemError}</p>
+            ) : null}
+            {lineItems.length > 0 ? (
+              <div className="mt-3 divide-y rounded-lg border border-[#dbe4ed]">
+                {lineItems.map((item, index) => (
+                  <div
+                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                    key={`${item.variantId}-${index}`}
+                  >
+                    <div>
+                      <p className="font-semibold">{item.productName}</p>
+                      <p className="text-xs text-[#718096]">
+                        {item.variantSku} · {money(item.unitPrice)} ×{" "}
+                        {item.quantity}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <strong>{money(item.total)}</strong>
+                      <button
+                        className="text-[#b42318]"
+                        type="button"
+                        onClick={() =>
+                          setLineItems((current) =>
+                            current.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {lineItems.length > 0 ? (
+              <p className="mt-2 text-right text-sm font-bold">
+                Line items total:{" "}
+                {money(
+                  lineItems.reduce((total, item) => total + item.total, 0),
+                )}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex justify-end gap-3 border-t border-[#e1e7ed] px-6 py-4">
@@ -468,7 +758,7 @@ function CreateDealModal({
           </button>
           <button
             className="rounded-full border border-[#005c5f] px-5 py-2.5 text-sm font-bold text-[#005c5f]"
-            onClick={onCreate}
+            onClick={() => onCreate(lineItems)}
             type="button"
           >
             Create and add another
@@ -499,9 +789,18 @@ function DealsBoard({
     const previous = deals;
     const without = deals.filter((item) => item.id !== deal.id);
     const targetItems = without.filter((item) => item.stage === stage);
-    const insertionIndex = beforeId ? targetItems.findIndex((item) => item.id === beforeId) : targetItems.length;
-    targetItems.splice(insertionIndex < 0 ? targetItems.length : insertionIndex, 0, { ...deal, stage });
-    const reordered = [...without.filter((item) => item.stage !== stage), ...targetItems];
+    const insertionIndex = beforeId
+      ? targetItems.findIndex((item) => item.id === beforeId)
+      : targetItems.length;
+    targetItems.splice(
+      insertionIndex < 0 ? targetItems.length : insertionIndex,
+      0,
+      { ...deal, stage },
+    );
+    const reordered = [
+      ...without.filter((item) => item.stage !== stage),
+      ...targetItems,
+    ];
     onDealsChange(reordered);
     try {
       const response = await fetch(`${API_URL}/deals/${deal.id}`, {
@@ -556,27 +855,58 @@ function DealsBoard({
             {deals
               .filter((deal) => deal.stage === label)
               .map((deal) => (
-                <div key={deal.id} onDragEnter={(event) => { event.stopPropagation(); const draggedId = event.dataTransfer.getData("deal-id"); if (draggedId && draggedId !== deal.id) event.currentTarget.classList.add("border-t-2", "border-[#1683ff]"); }} onDragLeave={(event) => { event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove("border-t-2", "border-[#1683ff]"); const dragged = deals.find((item) => item.id === event.dataTransfer.getData("deal-id")); if (dragged) void moveDeal(dragged, label, deal.id); }}>
-                <DealCard
-                  name={deal.name}
-                  amount={deal.amount}
-                  onCreateTask={onCreateTask}
-                  onCreateNote={onCreateNote}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData("deal-id", deal.id);
-                    const preview = event.currentTarget.cloneNode(
-                      true,
-                    ) as HTMLElement;
-                    preview.style.position = "fixed";
-                    preview.style.top = "-1000px";
-                    preview.style.width = `${event.currentTarget.offsetWidth}px`;
-                    preview.style.opacity = "1";
-                    preview.style.pointerEvents = "none";
-                    document.body.appendChild(preview);
-                    event.dataTransfer.setDragImage(preview, 20, 20);
-                    window.setTimeout(() => preview.remove(), 0);
+                <div
+                  key={deal.id}
+                  onDragEnter={(event) => {
+                    event.stopPropagation();
+                    const draggedId = event.dataTransfer.getData("deal-id");
+                    if (draggedId && draggedId !== deal.id)
+                      event.currentTarget.classList.add(
+                        "border-t-2",
+                        "border-[#1683ff]",
+                      );
                   }}
-                />
+                  onDragLeave={(event) => {
+                    event.currentTarget.classList.remove(
+                      "border-t-2",
+                      "border-[#1683ff]",
+                    );
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.classList.remove(
+                      "border-t-2",
+                      "border-[#1683ff]",
+                    );
+                    const dragged = deals.find(
+                      (item) =>
+                        item.id === event.dataTransfer.getData("deal-id"),
+                    );
+                    if (dragged) void moveDeal(dragged, label, deal.id);
+                  }}
+                >
+                  <DealCard
+                    name={deal.name}
+                    amount={deal.amount}
+                    onCreateTask={onCreateTask}
+                    onCreateNote={onCreateNote}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("deal-id", deal.id);
+                      const preview = event.currentTarget.cloneNode(
+                        true,
+                      ) as HTMLElement;
+                      preview.style.position = "fixed";
+                      preview.style.top = "-1000px";
+                      preview.style.width = `${event.currentTarget.offsetWidth}px`;
+                      preview.style.opacity = "1";
+                      preview.style.pointerEvents = "none";
+                      document.body.appendChild(preview);
+                      event.dataTransfer.setDragImage(preview, 20, 20);
+                      window.setTimeout(() => preview.remove(), 0);
+                    }}
+                  />
                 </div>
               ))}
             <button
@@ -604,13 +934,27 @@ function DealsEmptyState({ onCreateDeal }: { onCreateDeal: () => void }) {
     <section className="relative mb-4 overflow-hidden rounded-xl border border-[#f3d8cb] bg-[#fffaf7] px-5 py-12 text-center">
       <div className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
       <div className="pointer-events-none absolute -bottom-28 -right-16 h-64 w-64 rounded-full border-[70px] border-[#fff1eb]" />
-      <Image className="mx-auto object-contain" src="/Omsons Logo.png" alt="Omsons logo" width={180} height={120} priority />
-      <h2 className="mt-5 text-2xl font-bold text-[#111827]">Build a winning sales process</h2>
+      <Image
+        className="mx-auto object-contain"
+        src="/Omsons Logo.png"
+        alt="Omsons logo"
+        width={180}
+        height={120}
+        priority
+      />
+      <h2 className="mt-5 text-2xl font-bold text-[#111827]">
+        Build a winning sales process
+      </h2>
       <p className="mx-auto mt-2 max-w-xl text-base leading-7 text-[#516f90]">
-        Use Deals to track opportunities across your custom sales pipeline and report on your revenue.
+        Use Deals to track opportunities across your custom sales pipeline and
+        report on your revenue.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button className="rounded-full bg-[#005c5f] px-8 py-3 text-sm font-bold text-white" onClick={onCreateDeal} type="button">
+        <button
+          className="rounded-full bg-[#005c5f] px-8 py-3 text-sm font-bold text-white"
+          onClick={onCreateDeal}
+          type="button"
+        >
           Add deal
         </button>
         <button className="rounded-full border border-[#9fb3c8] bg-white px-8 py-3 text-sm font-bold">
@@ -628,16 +972,30 @@ function DealColumnFooter({
   deals: Deal[];
   probability: number;
 }) {
-  const totalAmount = deals.reduce((sum, deal) => sum + (deal.amount == null ? 0 : Number(deal.amount)), 0);
+  const totalAmount = deals.reduce(
+    (sum, deal) => sum + (deal.amount == null ? 0 : Number(deal.amount)),
+    0,
+  );
   const weightedAmount = totalAmount * (probability / 100);
-  const money = (amount: number) => amount.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+  const money = (amount: number) =>
+    amount.toLocaleString("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2,
+    });
 
   return (
     <div className="mt-3 rounded-b-[22px] border-t border-[#c9c9c9] bg-[#e9e9e9] px-2 pb-2 pt-1 text-sm leading-6 text-[#202020]">
-      <div><strong>{money(totalAmount)}</strong> | Total amount</div>
       <div>
-        <strong>{money(weightedAmount)}</strong> ({probability}%) | Weighted amount{" "}
-        <Info className="inline-block h-4 w-4 align-[-3px] text-[#666]" aria-label="Weighted amount information" />
+        <strong>{money(totalAmount)}</strong> | Total amount
+      </div>
+      <div>
+        <strong>{money(weightedAmount)}</strong> ({probability}%) | Weighted
+        amount{" "}
+        <Info
+          className="inline-block h-4 w-4 align-[-3px] text-[#666]"
+          aria-label="Weighted amount information"
+        />
         <strong className="sr-only">{money(weightedAmount)}</strong>
       </div>
     </div>
@@ -695,7 +1053,9 @@ function DealCard({
           10/31/2026
         </p>
       </DealFieldTooltip>
-      <DealFieldTooltip label={`Amount: ${amount == null ? "Not set" : `₹${amount.toLocaleString("en-IN")}`} `}>
+      <DealFieldTooltip
+        label={`Amount: ${amount == null ? "Not set" : `₹${amount.toLocaleString("en-IN")}`} `}
+      >
         <p className="mt-2 flex items-center gap-2">
           <IndianRupee className="h-4 w-4" aria-hidden="true" />
           {amount == null ? "—" : amount.toLocaleString("en-IN")}
@@ -714,13 +1074,13 @@ function DealCard({
         </p>
       </DealFieldTooltip>
       <div className="hidden" aria-hidden="true">
-      <p className="mt-3">▣ &nbsp;10/16/2026</p>
-      <p className="mt-2">▣ &nbsp;10/31/2026</p>
-      <p className="mt-2">▣ &nbsp;$100</p>
-      <p className="mt-2">♙ &nbsp;Soft Dev</p>
-      <p className="mt-3 border-b border-[#b9d2df] pb-3 font-medium text-[#006b70]">
-        ◉ &nbsp;Contact
-      </p>
+        <p className="mt-3">▣ &nbsp;10/16/2026</p>
+        <p className="mt-2">▣ &nbsp;10/31/2026</p>
+        <p className="mt-2">▣ &nbsp;$100</p>
+        <p className="mt-2">♙ &nbsp;Soft Dev</p>
+        <p className="mt-3 border-b border-[#b9d2df] pb-3 font-medium text-[#006b70]">
+          ◉ &nbsp;Contact
+        </p>
       </div>
       <div className="hidden" aria-hidden="true">
         <span>♧ &nbsp;☷</span>
@@ -879,7 +1239,16 @@ function TaskModal({ onClose }: { onClose: () => void }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim()) return;
-          console.info("Task created", { title, taskType, priority, queue, assignee, dueDate, reminder, notes });
+          console.info("Task created", {
+            title,
+            taskType,
+            priority,
+            queue,
+            assignee,
+            dueDate,
+            reminder,
+            notes,
+          });
           onClose();
         }}
       >
@@ -900,12 +1269,48 @@ function TaskModal({ onClose }: { onClose: () => void }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold">
               Due date
-              <span className="mt-2 flex gap-2"><select className="h-10 min-w-0 flex-1 rounded border p-2" value={dueOption} onChange={(event) => { const value = event.target.value; setDueOption(value); if (value === "Custom Date") window.setTimeout(() => customDateRef.current?.showPicker(), 0); }}>{dueOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><input className="h-10 w-28 rounded border p-2" type="time" defaultValue="08:00" /></span>
-              <input ref={customDateRef} className="pointer-events-none absolute h-px w-px opacity-0" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-label="Custom due date" />
+              <span className="mt-2 flex gap-2">
+                <select
+                  className="h-10 min-w-0 flex-1 rounded border p-2"
+                  value={dueOption}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDueOption(value);
+                    if (value === "Custom Date")
+                      window.setTimeout(
+                        () => customDateRef.current?.showPicker(),
+                        0,
+                      );
+                  }}
+                >
+                  {dueOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="h-10 w-28 rounded border p-2"
+                  type="time"
+                  defaultValue="08:00"
+                />
+              </span>
+              <input
+                ref={customDateRef}
+                className="pointer-events-none absolute h-px w-px opacity-0"
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                aria-label="Custom due date"
+              />
             </label>
             <label className="text-sm font-semibold">
               Reminder
-              <select className="mt-2 h-10 w-full rounded border p-2" value={reminder} onChange={(event) => setReminder(event.target.value)}>
+              <select
+                className="mt-2 h-10 w-full rounded border p-2"
+                value={reminder}
+                onChange={(event) => setReminder(event.target.value)}
+              >
                 <option>No reminder</option>
                 <option>At due time</option>
                 <option>1 hour before</option>
@@ -916,7 +1321,11 @@ function TaskModal({ onClose }: { onClose: () => void }) {
           <div className="grid gap-4 sm:grid-cols-4">
             <label className="text-sm font-semibold">
               Task type
-              <select className="mt-2 h-10 w-full rounded border p-2" value={taskType} onChange={(event) => setTaskType(event.target.value)}>
+              <select
+                className="mt-2 h-10 w-full rounded border p-2"
+                value={taskType}
+                onChange={(event) => setTaskType(event.target.value)}
+              >
                 <option>To-do</option>
                 <option>Call</option>
                 <option>Email</option>
@@ -924,7 +1333,11 @@ function TaskModal({ onClose }: { onClose: () => void }) {
             </label>
             <label className="text-sm font-semibold">
               Priority
-              <select className="mt-2 h-10 w-full rounded border p-2" value={priority} onChange={(event) => setPriority(event.target.value)}>
+              <select
+                className="mt-2 h-10 w-full rounded border p-2"
+                value={priority}
+                onChange={(event) => setPriority(event.target.value)}
+              >
                 <option>None</option>
                 <option>Low</option>
                 <option>Medium</option>
@@ -933,7 +1346,11 @@ function TaskModal({ onClose }: { onClose: () => void }) {
             </label>
             <label className="text-sm font-semibold">
               Queue
-              <select className="mt-2 h-10 w-full rounded border p-2" value={queue} onChange={(event) => setQueue(event.target.value)}>
+              <select
+                className="mt-2 h-10 w-full rounded border p-2"
+                value={queue}
+                onChange={(event) => setQueue(event.target.value)}
+              >
                 <option>None</option>
                 <option>Sales queue</option>
                 <option>Support queue</option>
@@ -941,7 +1358,11 @@ function TaskModal({ onClose }: { onClose: () => void }) {
             </label>
             <label className="text-sm font-semibold">
               Assigned to
-              <select className="mt-2 h-10 w-full rounded border p-2" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
+              <select
+                className="mt-2 h-10 w-full rounded border p-2"
+                value={assignee}
+                onChange={(event) => setAssignee(event.target.value)}
+              >
                 <option>Soft Dev</option>
                 <option>Unassigned</option>
               </select>
@@ -954,9 +1375,21 @@ function TaskModal({ onClose }: { onClose: () => void }) {
             onChange={(event) => setNotes(event.target.value)}
           />
           <div className="flex items-center gap-4 border-t pt-3 text-sm font-semibold text-[#444]">
-            <button type="button">B</button><button className="italic" type="button">I</button><button className="underline" type="button">U</button><button type="button">Tₓ</button><button type="button">More⌄</button><button type="button">↗</button><button type="button">▧</button><button type="button">☷</button>
+            <button type="button">B</button>
+            <button className="italic" type="button">
+              I
+            </button>
+            <button className="underline" type="button">
+              U
+            </button>
+            <button type="button">Tₓ</button>
+            <button type="button">More⌄</button>
+            <button type="button">↗</button>
+            <button type="button">▧</button>
+            <button type="button">☷</button>
           </div>
-          <span className="mr-auto text-xs text-[#777]">Draft saved</span><button
+          <span className="mr-auto text-xs text-[#777]">Draft saved</span>
+          <button
             className="text-left text-sm font-semibold text-[#006b70]"
             title="Click this button to update this activity's associations."
             type="button"
@@ -986,15 +1419,30 @@ function TaskModal({ onClose }: { onClose: () => void }) {
 
 function getDueDateOptions() {
   const today = new Date();
-  const addDays = (days: number) => { const date = new Date(today); date.setDate(date.getDate() + days); return date; };
-  const format = (date: Date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const weekday = (date: Date) => date.toLocaleDateString(undefined, { weekday: "long" });
+  const addDays = (days: number) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + days);
+    return date;
+  };
+  const format = (date: Date) =>
+    date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const weekday = (date: Date) =>
+    date.toLocaleDateString(undefined, { weekday: "long" });
   return [
     { value: "Today", label: "Today" },
     { value: "Tomorrow", label: `Tomorrow (${format(addDays(1))})` },
-    { value: "In 1 business day", label: `In 1 business day (${weekday(addDays(1))})` },
-    { value: "In 2 business days", label: `In 2 business days (${weekday(addDays(2))})` },
-    { value: "In 3 business days", label: `In 3 business days (${weekday(addDays(3))})` },
+    {
+      value: "In 1 business day",
+      label: `In 1 business day (${weekday(addDays(1))})`,
+    },
+    {
+      value: "In 2 business days",
+      label: `In 2 business days (${weekday(addDays(2))})`,
+    },
+    {
+      value: "In 3 business days",
+      label: `In 3 business days (${weekday(addDays(3))})`,
+    },
     { value: "In 1 week", label: `In 1 week (${format(addDays(7))})` },
     { value: "In 2 weeks", label: `In 2 weeks (${format(addDays(14))})` },
     { value: "In 1 month", label: `In 1 month (${format(addDays(30))})` },

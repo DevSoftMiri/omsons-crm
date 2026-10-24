@@ -9,7 +9,7 @@ class DashboardQuery {
   @IsOptional() @IsString() pipeline?: string;
 }
 
-@Controller(["dashboard", "dashboards"])
+@Controller("dashboard")
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService) {}
 

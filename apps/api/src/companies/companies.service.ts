@@ -8,9 +8,42 @@ export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
   private get db(): any { return this.prisma; }
 
+  private readonly filterAssociations = new Set(["Company", "Contact", "Deal", "Lead", "Activity", "Note", "Task", "User", "Call", "Email", "Meeting"]);
+  private readonly filterFields: Record<string, Set<string>> = {
+    Company: new Set(["name", "industry", "city", "state", "country", "annualRevenue", "numberOfEmployees", "customerType", "companySize", "targetAccount", "createdAt", "updatedAt"]),
+    Contact: new Set(["firstName", "lastName", "email", "phone", "lifecycleStage", "leadStatus", "lastContactedAt", "nextFollowUpAt", "createdAt"]),
+    Deal: new Set(["name", "stage", "amount", "closeDate", "ownerId", "createdAt", "updatedAt"]),
+    Lead: new Set(["title", "status", "priority", "value", "source", "expectedCloseAt", "createdAt"]),
+    Activity: new Set(["type", "subject", "createdAt", "updatedAt"]),
+    Note: new Set(["body", "createdAt", "updatedAt"]),
+    Task: new Set(["title", "priority", "dueAt", "doneAt", "createdAt"]),
+    User: new Set(["name", "email", "isActive"]),
+    Call: new Set(["subject", "createdAt"]), Email: new Set(["subject", "createdAt"]), Meeting: new Set(["subject", "createdAt"])
+  };
+
+  private filterWhere(node: any): any {
+    if (!node || typeof node !== "object") return {};
+    if (node.type === "group") {
+      const children = Array.isArray(node.children) ? node.children.map((child: any) => this.filterWhere(child)).filter((child: any) => Object.keys(child).length) : [];
+      return children.length ? { [node.logic === "OR" ? "OR" : "AND"]: children } : {};
+    }
+    const association = String(node.association ?? ""); const field = String(node.field ?? ""); const operator = String(node.operator ?? "is");
+    if (!this.filterAssociations.has(association) || !this.filterFields[association]?.has(field)) throw new BadRequestException(`Unsupported filter: ${association}.${field}`);
+    const rawValue = node.value;
+    const dateFields = new Set(["createdAt", "updatedAt", "lastContactedAt", "nextFollowUpAt", "closeDate", "expectedCloseAt", "dueAt", "doneAt"]);
+    const numberFields = new Set(["annualRevenue", "numberOfEmployees", "amount", "value"]);
+    const value = dateFields.has(field) ? (Array.isArray(rawValue) ? rawValue.map((item) => new Date(String(item))) : rawValue ? new Date(String(rawValue)) : rawValue) : numberFields.has(field) ? (Array.isArray(rawValue) ? rawValue.map(Number) : rawValue === "" ? rawValue : Number(rawValue)) : rawValue;
+    const scalar = operator === "known" ? { not: null } : operator === "unknown" ? null : operator === "contains" ? { contains: String(value ?? ""), mode: "insensitive" } : operator === "not-contains" ? { not: { contains: String(value ?? ""), mode: "insensitive" } } : operator === "gt" ? { gt: value } : operator === "gte" ? { gte: value } : operator === "lt" ? { lt: value } : operator === "lte" ? { lte: value } : operator === "between" && Array.isArray(value) ? { gte: value[0], lte: value[1] } : operator === "is-not" ? { not: value } : value;
+    const relation = association === "Company" ? null : association === "Contact" ? "contacts" : association === "Deal" ? "deals" : association === "Lead" ? "leads" : association === "User" ? "owner" : ["Activity", "Call", "Email", "Meeting"].includes(association) ? { OR: [{ contacts: { some: { activities: { some: { ...(association === "Activity" ? {} : { type: association.toUpperCase() }), [field]: scalar } } } } }, { leads: { some: { activities: { some: { ...(association === "Activity" ? {} : { type: association.toUpperCase() }), [field]: scalar } } } } }] } : association === "Note" ? { OR: [{ contacts: { some: { notes: { some: { [field]: scalar } } } } }, { leads: { some: { notes: { some: { [field]: scalar } } } } }] } : association === "Task" ? { leads: { some: { tasks: { some: { [field]: scalar } } } } } : null;
+    if (relation === "owner") return { owner: { [field]: scalar } };
+    if (relation && typeof relation === "string") return { [relation]: { some: { [field]: scalar } } };
+    if (relation && typeof relation === "object") return relation;
+    return { [field]: scalar };
+  }
+
   private normalize(dto: CompanyDto) {
     const regions = [...new Set((dto.regions ?? []).map((region) => region.trim()).filter(Boolean))];
-    return { ...dto, name: dto.name.trim(), regions, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
+    return { ...dto, name: dto.name.trim(), regions, customFields: dto.customFields ?? {}, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
   }
 
   private async validateParent(id: string | undefined, parentCompanyId: string | null) {
@@ -29,7 +62,9 @@ export class CompaniesService {
     const allowedSorts = ["name", "createdAt", "updatedAt", "industry", "city", "state", "country", "customerType", "companySize", "annualRevenue", "customerSince"];
     const sortBy = allowedSorts.includes(query.sortBy ?? "") ? query.sortBy! : "name";
     const sortOrder = query.sortOrder === "desc" ? "desc" : "asc";
-    const where = { isArchived: archived, ...(query.industry ? { industry: query.industry } : {}), ...(query.country ? { country: query.country } : {}), ...(query.parentCompanyId ? { parentCompanyId: query.parentCompanyId } : {}), ...(query.region ? { regions: { has: query.region } } : {}), ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { website: { contains: search, mode: "insensitive" as const } }, { city: { contains: search, mode: "insensitive" as const } }, { state: { contains: search, mode: "insensitive" as const } }] } : {}) };
+    let advancedWhere = {};
+    if (query.filters) { try { advancedWhere = this.filterWhere(JSON.parse(query.filters)); } catch (error) { if (error instanceof BadRequestException) throw error; throw new BadRequestException("Invalid filters JSON"); } }
+    const where = { isArchived: archived, ...(query.industry ? { industry: query.industry } : {}), ...(query.country ? { country: query.country } : {}), ...(query.parentCompanyId ? { parentCompanyId: query.parentCompanyId } : {}), ...(query.region ? { regions: { has: query.region } } : {}), ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { website: { contains: search, mode: "insensitive" as const } }, { city: { contains: search, mode: "insensitive" as const } }, { state: { contains: search, mode: "insensitive" as const } }] } : {}), ...advancedWhere };
     const [data, total] = await this.prisma.$transaction([this.prisma.company.findMany({
       where,
       select: {
