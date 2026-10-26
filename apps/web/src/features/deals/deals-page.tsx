@@ -131,13 +131,15 @@ export function DealsPage() {
   );
   const loadDeals = async (pipelineName?: string) => {
     try {
-      const response = await fetch(`${API_URL}/deals${pipelineName ? `?pipeline=${encodeURIComponent(pipelineName)}` : ""}`);
+      const response = await fetch(
+        `${API_URL}/deals${pipelineName ? `?pipeline=${encodeURIComponent(pipelineName)}` : ""}`,
+      );
       if (!response.ok) return;
       const payload = (await response.json()) as unknown;
       const records = Array.isArray(payload)
         ? (payload as Deal[])
         : Array.isArray((payload as { data?: unknown })?.data)
-          ? ((payload as { data: Deal[] }).data)
+          ? (payload as { data: Deal[] }).data
           : [];
       setDeals(records);
       setDealCount(records.length);
@@ -153,10 +155,11 @@ export function DealsPage() {
         const records = Array.isArray(payload)
           ? (payload as Pipeline[])
           : Array.isArray((payload as { data?: unknown })?.data)
-            ? ((payload as { data: Pipeline[] }).data)
+            ? (payload as { data: Pipeline[] }).data
             : [];
         setPipelines(records);
-        const defaultPipeline = records.find((item) => item.name === "Sales Pipeline") ?? records[0];
+        const defaultPipeline =
+          records.find((item) => item.name === "Sales Pipeline") ?? records[0];
         if (defaultPipeline) {
           setSelectedPipelineId(defaultPipeline.id);
           void loadDeals(defaultPipeline.name);
@@ -288,23 +291,69 @@ export function DealsPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <button className="inline-flex h-10 items-center gap-2 rounded-full border border-[#dbe4ed] bg-white px-4 text-sm outline-none" type="button" onClick={() => setPipelineMenuOpen((open) => !open)}>
-                {selectedPipeline?.name ?? "Select pipeline"}<ChevronDown className="h-4 w-4" />
+              <button
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-[#dbe4ed] bg-white px-4 text-sm outline-none"
+                type="button"
+                onClick={() => setPipelineMenuOpen((open) => !open)}
+              >
+                {selectedPipeline?.name ?? "Select pipeline"}
+                <ChevronDown className="h-4 w-4" />
               </button>
               {pipelineMenuOpen ? (
                 <div className="absolute right-0 top-12 z-40 w-72 rounded-2xl border border-[#d0d7de] bg-white p-3 shadow-xl">
                   <label className="flex h-10 items-center rounded-full border-2 border-[#1683ff] px-3 text-sm">
-                    <Search className="mr-2 h-4 w-4" /><input className="min-w-0 flex-1 outline-none" placeholder="Search" value={pipelineSearch} onChange={(event) => setPipelineSearch(event.target.value)} />
+                    <Search className="mr-2 h-4 w-4" />
+                    <input
+                      className="min-w-0 flex-1 outline-none"
+                      placeholder="Search"
+                      value={pipelineSearch}
+                      onChange={(event) =>
+                        setPipelineSearch(event.target.value)
+                      }
+                    />
                   </label>
-                  <p className="px-2 py-3 text-sm text-[#a3a3a3]">All Pipelines</p>
+                  <p className="px-2 py-3 text-sm text-[#a3a3a3]">
+                    All Pipelines
+                  </p>
                   <div className="max-h-48 overflow-y-auto border-y border-[#e5e7eb] py-2">
-                    {pipelines.filter((item) => item.name.toLowerCase().includes(pipelineSearch.toLowerCase())).map((pipeline) => (
-                      <button key={pipeline.id} className={`block w-full px-3 py-2 text-left text-sm ${pipeline.id === selectedPipelineId ? "font-bold text-white" : "text-[#006b70]"}`} type="button" onClick={() => { setSelectedPipelineId(pipeline.id); setPipelineMenuOpen(false); }}>
-                        <span className={pipeline.id === selectedPipelineId ? "rounded-md bg-[#b4002b] px-2 py-1" : ""}>{pipeline.name}</span>
-                      </button>
-                    ))}
+                    {pipelines
+                      .filter((item) =>
+                        item.name
+                          .toLowerCase()
+                          .includes(pipelineSearch.toLowerCase()),
+                      )
+                      .map((pipeline) => (
+                        <button
+                          key={pipeline.id}
+                          className={`block w-full px-3 py-2 text-left text-sm ${pipeline.id === selectedPipelineId ? "font-bold text-white" : "text-[#006b70]"}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPipelineId(pipeline.id);
+                            setPipelineMenuOpen(false);
+                          }}
+                        >
+                          <span
+                            className={
+                              pipeline.id === selectedPipelineId
+                                ? "rounded-md bg-[#b4002b] px-2 py-1"
+                                : ""
+                            }
+                          >
+                            {pipeline.name}
+                          </span>
+                        </button>
+                      ))}
                   </div>
-                  <button className="w-full px-3 py-3 text-left font-semibold text-[#006b70]" type="button" onClick={() => { setPipelineManagerOpen(true); setPipelineMenuOpen(false); }}>Manage pipelines ↗</button>
+                  <button
+                    className="w-full px-3 py-3 text-left font-semibold text-[#006b70]"
+                    type="button"
+                    onClick={() => {
+                      setPipelineManagerOpen(true);
+                      setPipelineMenuOpen(false);
+                    }}
+                  >
+                    Manage pipelines ↗
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -432,7 +481,17 @@ export function DealsPage() {
       ) : null}
       {taskOpen ? <TaskModal onClose={() => setTaskOpen(false)} /> : null}
       {noteOpen ? <NoteModal onClose={() => setNoteOpen(false)} /> : null}
-      {pipelineManagerOpen ? <PipelineManager pipelines={pipelines} onChange={(next) => { setPipelines(next); if (!selectedPipelineId && next[0]) setSelectedPipelineId(next[0].id); }} onClose={() => setPipelineManagerOpen(false)} /> : null}
+      {pipelineManagerOpen ? (
+        <PipelineManager
+          pipelines={pipelines}
+          onChange={(next) => {
+            setPipelines(next);
+            if (!selectedPipelineId && next[0])
+              setSelectedPipelineId(next[0].id);
+          }}
+          onClose={() => setPipelineManagerOpen(false)}
+        />
+      ) : null}
     </AppShell>
   );
 }
@@ -452,7 +511,11 @@ function CreateDealModal({
   dealAmount: string;
   setDealAmount: (value: string) => void;
   onCancel: () => void;
-  onCreate: (lineItems: DealLineItem[], pipelineId: string, stageId: string) => Promise<void> | void;
+  onCreate: (
+    lineItems: DealLineItem[],
+    pipelineId: string,
+    stageId: string,
+  ) => Promise<void> | void;
   error?: string;
   pipeline?: Pipeline;
 }) {
@@ -474,7 +537,10 @@ function CreateDealModal({
     ? pipeline.stages
     : [];
   useEffect(() => {
-    if (availableStages[0] && !availableStages.some((stage) => stage.id === stageId)) {
+    if (
+      availableStages[0] &&
+      !availableStages.some((stage) => stage.id === stageId)
+    ) {
       setStageId(availableStages[0].id);
     }
   }, [availableStages, stageId]);
@@ -568,7 +634,11 @@ function CreateDealModal({
           if (submitting) return;
           setSubmitting(true);
           if (!pipeline?.id || !stageId) return;
-          try { await onCreate(lineItems, pipeline.id, stageId); } finally { setSubmitting(false); }
+          try {
+            await onCreate(lineItems, pipeline.id, stageId);
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <div className="flex items-center justify-between border-b border-[#e1e7ed] px-6 py-4">
@@ -614,13 +684,24 @@ function CreateDealModal({
           {field(
             "Pipeline",
             <select className={input} value={pipeline?.id ?? ""} disabled>
-              <option value={pipeline?.id}>{pipeline?.name ?? "Select pipeline"}</option>
+              <option value={pipeline?.id}>
+                {pipeline?.name ?? "Select pipeline"}
+              </option>
             </select>,
           )}
           {field(
             "Deal stage",
-            <select className={input} value={stageId} onChange={(event) => setStageId(event.target.value)} required>
-              {availableStages.map((stage) => <option value={stage.id} key={stage.id}>{stage.name}</option>)}
+            <select
+              className={input}
+              value={stageId}
+              onChange={(event) => setStageId(event.target.value)}
+              required
+            >
+              {availableStages.map((stage) => (
+                <option value={stage.id} key={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
             </select>,
           )}
           {field(
@@ -812,15 +893,23 @@ function CreateDealModal({
           </button>
           <button
             className="rounded-full bg-[#005c5f] px-5 py-2.5 text-sm font-bold text-white"
-              disabled={submitting}
-              type="submit"
+            disabled={submitting}
+            type="submit"
           >
-              {submitting ? "Creating..." : "Create"}
+            {submitting ? "Creating..." : "Create"}
           </button>
           <button
             className="rounded-full border border-[#005c5f] px-5 py-2.5 text-sm font-bold text-[#005c5f]"
-              disabled={submitting}
-              onClick={async () => { if (submitting || !pipeline?.id || !stageId) return; setSubmitting(true); try { await onCreate(lineItems, pipeline.id, stageId); } finally { setSubmitting(false); } }}
+            disabled={submitting}
+            onClick={async () => {
+              if (submitting || !pipeline?.id || !stageId) return;
+              setSubmitting(true);
+              try {
+                await onCreate(lineItems, pipeline.id, stageId);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
             type="button"
           >
             Create and add another
@@ -892,105 +981,105 @@ function DealsBoard({
       >
         {pipelineStages.map((stage) => {
           const label = stage.name;
-          const color = stage.color || "bg-slate-100 text-slate-700";
+          const color = stage.color || "bg-[#eeeeee] text-[#333333]";
           const probability = stage.probability ?? 0;
           return (
-          <div
-            className={`relative flex h-[calc(100vh-245px)] min-h-[360px] min-w-[290px] flex-col overflow-y-auto overflow-x-hidden rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
-            key={label}
-            onDragEnter={() => setDropStage(label)}
-            onDragLeave={() => setDropStage(null)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const deal = deals.find(
-                (item) => item.id === event.dataTransfer.getData("deal-id"),
-              );
-              if (deal) void moveDeal(deal, label);
-              setDropStage(null);
-            }}
-          >
-            <div className="sticky top-0 z-30 -mx-2.5 mb-2 flex min-h-[42px] shrink-0 items-center bg-[#f4f4f4] px-2.5 py-2 shadow-[0_2px_0_#f4f4f4]">
-              <span
-                className={`inline-flex rounded-md px-3 py-1 text-sm font-bold ${color}`}
-              >
-                {label}
-              </span>
-              <span className="ml-3 text-sm font-semibold text-[#516f90]">
-                {deals.filter((deal) => deal.stage === label).length}
-              </span>
-            </div>
-            {deals
-              .filter((deal) => deal.stage === label)
-              .map((deal) => (
-                <div
-                  key={deal.id}
-                  onDragEnter={(event) => {
-                    event.stopPropagation();
-                    const draggedId = event.dataTransfer.getData("deal-id");
-                    if (draggedId && draggedId !== deal.id)
-                      event.currentTarget.classList.add(
+            <div
+              className={`relative flex h-[calc(100vh-245px)] min-h-[360px] min-w-[290px] flex-col overflow-y-auto overflow-x-hidden rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
+              key={label}
+              onDragEnter={() => setDropStage(label)}
+              onDragLeave={() => setDropStage(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const deal = deals.find(
+                  (item) => item.id === event.dataTransfer.getData("deal-id"),
+                );
+                if (deal) void moveDeal(deal, label);
+                setDropStage(null);
+              }}
+            >
+              <div className="sticky top-0 z-30 -mx-2.5 mb-2 flex min-h-[42px] shrink-0 items-center bg-[#f4f4f4] px-2.5 py-2 shadow-[0_2px_0_#f4f4f4]">
+                <span
+                  className={`inline-flex rounded-md px-3 py-1 text-sm font-bold ${color}`}
+                >
+                  {label}
+                </span>
+                <span className="ml-3 text-sm font-semibold text-[#516f90]">
+                  {deals.filter((deal) => deal.stage === label).length}
+                </span>
+              </div>
+              {deals
+                .filter((deal) => deal.stage === label)
+                .map((deal) => (
+                  <div
+                    key={deal.id}
+                    onDragEnter={(event) => {
+                      event.stopPropagation();
+                      const draggedId = event.dataTransfer.getData("deal-id");
+                      if (draggedId && draggedId !== deal.id)
+                        event.currentTarget.classList.add(
+                          "border-t-2",
+                          "border-[#1683ff]",
+                        );
+                    }}
+                    onDragLeave={(event) => {
+                      event.currentTarget.classList.remove(
                         "border-t-2",
                         "border-[#1683ff]",
                       );
-                  }}
-                  onDragLeave={(event) => {
-                    event.currentTarget.classList.remove(
-                      "border-t-2",
-                      "border-[#1683ff]",
-                    );
-                  }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.currentTarget.classList.remove(
-                      "border-t-2",
-                      "border-[#1683ff]",
-                    );
-                    const dragged = deals.find(
-                      (item) =>
-                        item.id === event.dataTransfer.getData("deal-id"),
-                    );
-                    if (dragged) void moveDeal(dragged, label, deal.id);
-                  }}
-                >
-                  <DealCard
-                    name={deal.name}
-                    amount={deal.amount}
-                    onCreateTask={onCreateTask}
-                    onCreateNote={onCreateNote}
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData("deal-id", deal.id);
-                      const preview = event.currentTarget.cloneNode(
-                        true,
-                      ) as HTMLElement;
-                      preview.style.position = "fixed";
-                      preview.style.top = "-1000px";
-                      preview.style.width = `${event.currentTarget.offsetWidth}px`;
-                      preview.style.opacity = "1";
-                      preview.style.pointerEvents = "none";
-                      document.body.appendChild(preview);
-                      event.dataTransfer.setDragImage(preview, 20, 20);
-                      window.setTimeout(() => preview.remove(), 0);
                     }}
-                  />
-                </div>
-              ))}
-            <button
-              className="mt-3 w-full rounded-full border border-[#8d8d8d] bg-white py-2 text-sm font-medium text-[#213343] hover:bg-[#f7f9fb]"
-              onClick={onCreateDeal}
-              type="button"
-            >
-              + Deal
-            </button>
-            <div className="sticky bottom-0 z-20 mt-3 bg-[#e9e9e9]">
-              <DealColumnFooter
-                deals={deals.filter((deal) => deal.stage === label)}
-                probability={probability}
-              />
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.currentTarget.classList.remove(
+                        "border-t-2",
+                        "border-[#1683ff]",
+                      );
+                      const dragged = deals.find(
+                        (item) =>
+                          item.id === event.dataTransfer.getData("deal-id"),
+                      );
+                      if (dragged) void moveDeal(dragged, label, deal.id);
+                    }}
+                  >
+                    <DealCard
+                      name={deal.name}
+                      amount={deal.amount}
+                      onCreateTask={onCreateTask}
+                      onCreateNote={onCreateNote}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("deal-id", deal.id);
+                        const preview = event.currentTarget.cloneNode(
+                          true,
+                        ) as HTMLElement;
+                        preview.style.position = "fixed";
+                        preview.style.top = "-1000px";
+                        preview.style.width = `${event.currentTarget.offsetWidth}px`;
+                        preview.style.opacity = "1";
+                        preview.style.pointerEvents = "none";
+                        document.body.appendChild(preview);
+                        event.dataTransfer.setDragImage(preview, 20, 20);
+                        window.setTimeout(() => preview.remove(), 0);
+                      }}
+                    />
+                  </div>
+                ))}
+              <button
+                className="mt-3 w-full rounded-full border border-[#8d8d8d] bg-white py-2 text-sm font-medium text-[#213343] hover:bg-[#f7f9fb]"
+                onClick={onCreateDeal}
+                type="button"
+              >
+                + Deal
+              </button>
+              <div className="sticky bottom-0 z-20 mt-3 bg-[#e9e9e9]">
+                <DealColumnFooter
+                  deals={deals.filter((deal) => deal.stage === label)}
+                  probability={probability}
+                />
+              </div>
             </div>
-          </div>
           );
         })}
       </div>
@@ -999,30 +1088,47 @@ function DealsBoard({
 }
 
 const pipelineStageColors = [
-  "bg-blue-50 text-[#1473e6]",
-  "bg-orange-50 text-[#d94d12]",
-  "bg-pink-50 text-[#d6008f]",
-  "bg-violet-50 text-[#4f37d4]",
-  "bg-amber-50 text-[#b56200]",
-  "bg-emerald-600 text-white",
-  "bg-rose-700 text-white",
-  "bg-slate-100 text-slate-700",
+  "bg-[#171717] text-white",
+  "bg-[#b4002b] text-white",
+  "bg-[#c83a00] text-white",
+  "bg-[#f5b82e] text-[#171717]",
+  "bg-[#00843d] text-white",
+  "bg-[#007f7f] text-white",
+  "bg-[#0b6fd3] text-white",
+  "bg-[#7b4de3] text-white",
+  "bg-[#d00082] text-white",
+  "bg-[#eeeeee] text-[#333333]",
+  "bg-[#f8d8d5] text-[#8f1d1d]",
+  "bg-[#f8d6c8] text-[#8f341d]",
+  "bg-[#faecc7] text-[#7a5b16]",
+  "bg-[#d9efdf] text-[#1e6b35]",
+  "bg-[#c8f1f0] text-[#176c6d]",
+  "bg-[#cfe5f3] text-[#255a7a]",
+  "bg-[#dedcf5] text-[#4c4285]",
+  "bg-[#f6d6e5] text-[#8d3e65]",
 ];
 
-function PipelineManager({ pipelines, onChange, onClose }: { pipelines: Pipeline[]; onChange: (pipelines: Pipeline[]) => void; onClose: () => void }) {
+function PipelineManager({
+  pipelines,
+  onChange,
+  onClose,
+}: {
+  pipelines: Pipeline[];
+  onChange: (pipelines: Pipeline[]) => void;
+  onClose: () => void;
+}) {
   const [selectedId, setSelectedId] = useState(pipelines[0]?.id ?? "");
   const [pipelineName, setPipelineName] = useState("");
   const [stageName, setStageName] = useState("");
   const [stageDescription, setStageDescription] = useState("");
   const [stageColor, setStageColor] = useState(pipelineStageColors[0]);
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const selected = (Array.isArray(pipelines) ? pipelines : []).find(
     (item) => item.id === selectedId,
   );
-  const selectedStages = Array.isArray(selected?.stages)
-    ? selected.stages
-    : [];
+  const selectedStages = Array.isArray(selected?.stages) ? selected.stages : [];
   const refresh = async () => {
     const response = await fetch(`${API_URL}/pipelines`);
     if (response.ok) {
@@ -1030,41 +1136,304 @@ function PipelineManager({ pipelines, onChange, onClose }: { pipelines: Pipeline
       const next = Array.isArray(payload)
         ? (payload as Pipeline[])
         : Array.isArray((payload as { data?: unknown })?.data)
-          ? ((payload as { data: Pipeline[] }).data)
+          ? (payload as { data: Pipeline[] }).data
           : [];
       onChange(next);
     }
   };
   const save = async (request: () => Promise<Response>) => {
     if (saving) return;
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
       const response = await request();
       if (!response.ok) throw new Error(await response.text());
       await refresh();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to save changes");
-    } finally { setSaving(false); }
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to save changes",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#e1e7ed] px-6 py-4"><h2 className="text-xl font-semibold">Manage pipelines</h2><button type="button" onClick={onClose}>×</button></div>
+        <div className="flex items-center justify-between border-b border-[#e1e7ed] px-6 py-4">
+          <h2 className="text-xl font-semibold">Manage pipelines</h2>
+          <button type="button" onClick={onClose}>
+            ×
+          </button>
+        </div>
         <div className="grid gap-6 p-6 md:grid-cols-[220px_1fr]">
           <div>
             <p className="mb-2 text-sm font-bold">Pipelines</p>
-            <div className="space-y-1">{pipelines.map((pipeline) => <button key={pipeline.id} className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedId === pipeline.id ? "bg-[#e8f6f7] font-bold text-[#006b70]" : "hover:bg-[#f7f9fb]"}`} type="button" onClick={() => setSelectedId(pipeline.id)}>{pipeline.name}</button>)}</div>
-            <div className="mt-4 flex gap-2"><input className="h-9 min-w-0 flex-1 rounded-md border px-2 text-sm" placeholder="New pipeline" value={pipelineName} onChange={(event) => setPipelineName(event.target.value)} /><button className="rounded-md bg-[#006b70] px-3 text-white disabled:opacity-50" disabled={saving || !pipelineName.trim()} type="button" onClick={() => void save(async () => { const response = await fetch(`${API_URL}/pipelines`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ name: pipelineName.trim() }) }); if (response.ok) { setPipelineName(""); const created = (await response.clone().json()) as Pipeline; setSelectedId(created.id); } return response; })}>Add</button></div>
+            <div className="space-y-1">
+              {pipelines.map((pipeline) => (
+                <button
+                  key={pipeline.id}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedId === pipeline.id ? "bg-[#e8f6f7] font-bold text-[#006b70]" : "hover:bg-[#f7f9fb]"}`}
+                  type="button"
+                  onClick={() => setSelectedId(pipeline.id)}
+                >
+                  {pipeline.name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <input
+                className="h-9 min-w-0 flex-1 rounded-md border px-2 text-sm"
+                placeholder="New pipeline"
+                value={pipelineName}
+                onChange={(event) => setPipelineName(event.target.value)}
+              />
+              <button
+                className="rounded-md bg-[#006b70] px-3 text-white disabled:opacity-50"
+                disabled={saving || !pipelineName.trim()}
+                type="button"
+                onClick={() =>
+                  void save(async () => {
+                    const response = await fetch(`${API_URL}/pipelines`, {
+                      method: "POST",
+                      headers: createHeaders(createIdempotencyKey()),
+                      body: JSON.stringify({ name: pipelineName.trim() }),
+                    });
+                    if (response.ok) {
+                      setPipelineName("");
+                      const created = (await response
+                        .clone()
+                        .json()) as Pipeline;
+                      setSelectedId(created.id);
+                    }
+                    return response;
+                  })
+                }
+              >
+                Add
+              </button>
+            </div>
           </div>
           <div>
-            <div className="mb-2 flex items-center justify-between"><p className="text-sm font-bold">Stages {selected ? `for ${selected.name}` : ""}</p>{selected ? <button className="text-xs font-semibold text-[#006b70]" type="button" disabled={saving} onClick={() => { const name = window.prompt("Pipeline name", selected.name); if (name?.trim()) void save(() => fetch(`${API_URL}/pipelines/${selected.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) })); }}>Rename</button> : null}</div>
-            {selected ? <div className="space-y-2">{selectedStages.map((stage, index) => <div className="flex items-center gap-2 rounded-lg border p-2" key={stage.id}><span className={`rounded-full px-2 py-1 text-xs font-semibold ${stage.color || "bg-slate-100 text-slate-700"}`}>{stage.name}</span><span className="min-w-0 flex-1 truncate text-xs text-[#516f90]">{stage.description || "No description"}</span><button className="text-xs font-semibold text-[#006b70]" type="button" disabled={saving} onClick={() => { const name = window.prompt("Stage name", stage.name); if (name?.trim()) void save(() => fetch(`${API_URL}/pipelines/${selected.id}/stages/${stage.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }) })); }}>Edit</button><button className="text-xs" type="button" disabled={saving || index === 0} onClick={() => void save(() => fetch(`${API_URL}/pipelines/${selected.id}/stages/${stage.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: index - 1 }) }))}>↑</button><button className="text-xs" type="button" disabled={saving || index === selectedStages.length - 1} onClick={() => void save(() => fetch(`${API_URL}/pipelines/${selected.id}/stages/${stage.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: index + 1 }) }))}>↓</button><button className="text-xs font-semibold text-[#b42318]" type="button" disabled={saving} onClick={() => void save(() => fetch(`${API_URL}/pipelines/${selected.id}/stages/${stage.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }))}>Delete</button></div>)}
-              <div className="mt-4 rounded-xl border border-[#dbe4ed] p-4"><p className="mb-3 font-bold">Add stage</p><div className="grid gap-3"><input className="h-10 rounded-md border px-3" placeholder="Stage name" value={stageName} onChange={(event) => setStageName(event.target.value)} /><textarea className="rounded-md border px-3 py-2" placeholder="Stage description" value={stageDescription} onChange={(event) => setStageDescription(event.target.value)} /><div className="flex flex-wrap gap-2">{pipelineStageColors.map((color) => <button key={color} className={`h-8 w-8 rounded-full border ${color} ${stageColor === color ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`} type="button" aria-label={`Use ${color} color`} onClick={() => setStageColor(color)} />)}</div><button className="w-fit rounded-md bg-[#006b70] px-4 py-2 font-semibold text-white disabled:opacity-50" disabled={saving || !stageName.trim()} type="button" onClick={() => void save(async () => { const response = await fetch(`${API_URL}/pipelines/${selected.id}/stages`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ name: stageName.trim(), description: stageDescription, color: stageColor, order: selectedStages.length }) }); if (response.ok) { setStageName(""); setStageDescription(""); } return response; })}>Save stage</button></div></div>
-            </div> : <p className="text-sm text-[#516f90]">Create or select a pipeline to manage its stages.</p>}
-            {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-bold">
+                Stages {selected ? `for ${selected.name}` : ""}
+              </p>
+              {selected ? (
+                <button
+                  className="text-xs font-semibold text-[#006b70]"
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    const name = window.prompt("Pipeline name", selected.name);
+                    if (name?.trim())
+                      void save(() =>
+                        fetch(`${API_URL}/pipelines/${selected.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ name: name.trim() }),
+                        }),
+                      );
+                  }}
+                >
+                  Rename
+                </button>
+              ) : null}
+            </div>
+            {selected ? (
+              <div className="space-y-2">
+                {selectedStages.map((stage, index) => (
+                  <div
+                    className="flex items-center gap-2 rounded-lg border p-2"
+                    key={stage.id}
+                  >
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${stage.color || "bg-[#eeeeee] text-[#333333]"}`}
+                    >
+                      {stage.name}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-[#516f90]">
+                      {stage.description || "No description"}
+                    </span>
+                    <button
+                      className="text-xs font-semibold text-[#006b70]"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        setEditingStageId(stage.id);
+                        setStageName(stage.name);
+                        setStageDescription(stage.description || "");
+                        setStageColor(stage.color || pipelineStageColors[0]);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="text-xs"
+                      type="button"
+                      disabled={saving || index === 0}
+                      onClick={() =>
+                        void save(() =>
+                          fetch(
+                            `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ order: index - 1 }),
+                            },
+                          ),
+                        )
+                      }
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="text-xs"
+                      type="button"
+                      disabled={saving || index === selectedStages.length - 1}
+                      onClick={() =>
+                        void save(() =>
+                          fetch(
+                            `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ order: index + 1 }),
+                            },
+                          ),
+                        )
+                      }
+                    >
+                      ↓
+                    </button>
+                    <button
+                      className="text-xs font-semibold text-[#b42318]"
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        void save(() =>
+                          fetch(
+                            `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
+                            {
+                              method: "DELETE",
+                              headers: { "Content-Type": "application/json" },
+                            },
+                          ),
+                        )
+                      }
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                <div className="mt-4 rounded-xl border border-[#dbe4ed] p-4">
+                  <p className="mb-3 font-bold">
+                    {editingStageId ? "Edit stage" : "Add stage"}
+                  </p>
+                  <div className="grid gap-3">
+                    <input
+                      className="h-10 rounded-md border px-3"
+                      placeholder="Stage name"
+                      value={stageName}
+                      onChange={(event) => setStageName(event.target.value)}
+                    />
+                    <textarea
+                      className="rounded-md border px-3 py-2"
+                      placeholder="Stage description"
+                      value={stageDescription}
+                      onChange={(event) =>
+                        setStageDescription(event.target.value)
+                      }
+                    />
+                    <div className="grid grid-cols-9 gap-2">
+                      {pipelineStageColors.map((color) => (
+                        <button
+                          key={color}
+                          className={`h-8 w-8 rounded-full border border-[#cbd5e1] ${color} ${stageColor === color ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
+                          type="button"
+                          aria-label={`Use ${color} color`}
+                          onClick={() => setStageColor(color)}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      className="w-fit rounded-md bg-[#006b70] px-4 py-2 font-semibold text-white disabled:opacity-50"
+                      disabled={saving || !stageName.trim()}
+                      type="button"
+                      onClick={() =>
+                        void save(async () => {
+                          const response = await fetch(
+                            `${API_URL}/pipelines/${selected.id}/stages${editingStageId ? `/${editingStageId}` : ""}`,
+                            {
+                              method: editingStageId ? "PATCH" : "POST",
+                              headers: createHeaders(createIdempotencyKey()),
+                              body: JSON.stringify({
+                                name: stageName.trim(),
+                                description: stageDescription,
+                                color: stageColor,
+                                order: editingStageId
+                                  ? selectedStages.find(
+                                      (item) => item.id === editingStageId,
+                                    )?.order ?? 0
+                                  : selectedStages.length,
+                              }),
+                            },
+                          );
+                          if (response.ok) {
+                            setStageName("");
+                            setStageDescription("");
+                            setEditingStageId(null);
+                          }
+                          return response;
+                        })
+                      }
+                    >
+                      {editingStageId ? "Save" : "Save stage"}
+                    </button>
+                    {editingStageId ? (
+                      <button
+                        className="ml-2 rounded-md border px-4 py-2"
+                        type="button"
+                        onClick={() => {
+                          setEditingStageId(null);
+                          setStageName("");
+                          setStageDescription("");
+                          setStageColor(pipelineStageColors[0]);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#516f90]">
+                Create or select a pipeline to manage its stages.
+              </p>
+            )}
+            {error ? (
+              <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
           </div>
         </div>
-        <div className="flex justify-end border-t border-[#e1e7ed] px-6 py-4"><button className="rounded-md border px-4 py-2" type="button" onClick={onClose}>Close</button></div>
+        <div className="flex justify-end border-t border-[#e1e7ed] px-6 py-4">
+          <button
+            className="rounded-md border px-4 py-2"
+            type="button"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
       </section>
     </div>
   );

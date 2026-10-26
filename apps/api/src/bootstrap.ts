@@ -10,9 +10,19 @@ export async function createApp() {
 
   app.setGlobalPrefix("api");
 
-  const configuredOrigins = config.get("CORS_ORIGIN", "http://localhost:3000")
-    .split(",").map((origin: string) => origin.trim()).filter(Boolean);
-  const allowedOrigins = new Set([...configuredOrigins, "http://localhost:3000", "http://127.0.0.1:3000"]);
+  const configuredOrigins = config.get(
+    "CORS_ORIGIN",
+    "http://localhost:3000,https://omsonscrm.vercel.app",
+  )
+    .split(",")
+    .map((origin: string) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const allowedOrigins = new Set([
+    ...configuredOrigins,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://omsonscrm.vercel.app",
+  ]);
   app.enableCors({
     origin: (origin: string | undefined, callback) => {
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);

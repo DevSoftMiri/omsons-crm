@@ -7,14 +7,22 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 
 const DEFAULT_STAGES = [
-  ["Appointment Scheduled", "bg-blue-50 text-[#1473e6]", 20],
-  ["Qualified To Buy", "bg-orange-50 text-[#d94d12]", 40],
-  ["Presentation Scheduled", "bg-pink-50 text-[#d6008f]", 60],
-  ["Decision Maker Bought-In", "bg-violet-50 text-[#4f37d4]", 80],
-  ["Contract Sent", "bg-amber-50 text-[#b56200]", 90],
-  ["Closed Won", "bg-emerald-600 text-white", 100],
-  ["Closed Lost", "bg-rose-700 text-white", 0],
+  ["Appointment Scheduled", "bg-[#0b6fd3] text-white", 20],
+  ["Qualified To Buy", "bg-[#c83a00] text-white", 40],
+  ["Presentation Scheduled", "bg-[#d00082] text-white", 60],
+  ["Decision Maker Bought-In", "bg-[#7b4de3] text-white", 80],
+  ["Contract Sent", "bg-[#f5b82e] text-[#171717]", 90],
+  ["Closed Won", "bg-[#00843d] text-white", 100],
+  ["Closed Lost", "bg-[#b4002b] text-white", 0],
 ] as const;
+const ALLOWED_STAGE_COLORS = new Set<string>([
+  "bg-[#171717] text-white", "bg-[#b4002b] text-white", "bg-[#c83a00] text-white",
+  "bg-[#f5b82e] text-[#171717]", "bg-[#00843d] text-white", "bg-[#007f7f] text-white",
+  "bg-[#0b6fd3] text-white", "bg-[#7b4de3] text-white", "bg-[#d00082] text-white",
+  "bg-[#eeeeee] text-[#333333]", "bg-[#f8d8d5] text-[#8f1d1d]", "bg-[#f8d6c8] text-[#8f341d]",
+  "bg-[#faecc7] text-[#7a5b16]", "bg-[#d9efdf] text-[#1e6b35]", "bg-[#c8f1f0] text-[#176c6d]",
+  "bg-[#cfe5f3] text-[#255a7a]", "bg-[#dedcf5] text-[#4c4285]", "bg-[#f6d6e5] text-[#8d3e65]",
+]);
 
 @Injectable()
 export class PipelinesService {
@@ -136,6 +144,10 @@ export class PipelinesService {
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) throw new BadRequestException("Stage probability must be between 0 and 100");
     return parsed;
   }
-  private color(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : "bg-slate-100 text-slate-700"; }
+  private color(value: unknown) {
+    const color = typeof value === "string" && value.trim() ? value.trim() : "bg-[#eeeeee] text-[#333333]";
+    if (!ALLOWED_STAGE_COLORS.has(color)) throw new BadRequestException("Invalid stage color");
+    return color;
+  }
   private isUniqueError(error: unknown) { return typeof error === "object" && error !== null && "code" in error && error.code === "P2002"; }
 }

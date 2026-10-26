@@ -16,7 +16,6 @@ ALTER TABLE "Deal" ADD COLUMN "stageId" TEXT;
 CREATE UNIQUE INDEX "Pipeline_name_key" ON "Pipeline"("name");
 CREATE UNIQUE INDEX "PipelineStage_pipelineId_name_key" ON "PipelineStage"("pipelineId", "name");
 CREATE INDEX "PipelineStage_pipelineId_order_idx" ON "PipelineStage"("pipelineId", "order");
-CREATE INDEX "PipelineStage_order_idx" ON "PipelineStage"("order");
 CREATE INDEX "Deal_pipelineId_stageId_idx" ON "Deal"("pipelineId", "stageId");
 
 ALTER TABLE "PipelineStage" ADD CONSTRAINT "PipelineStage_pipelineId_fkey" FOREIGN KEY ("pipelineId") REFERENCES "Pipeline"("id") ON DELETE CASCADE ON UPDATE CASCADE;
