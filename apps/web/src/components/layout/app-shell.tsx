@@ -33,6 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showSetupPrompt] = useState(false);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
@@ -122,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        {false ? (
+        {showSetupPrompt ? (
           <div className="mx-2 mb-3 shrink-0 rounded-md border border-white/10 bg-[#2d3034] p-3">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
               <span className="text-[#ff5c35]">▥</span>

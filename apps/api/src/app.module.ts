@@ -10,6 +10,7 @@ import { UsersModule } from "./users/users.module";
 import { buildCrudModule } from "./common/crud.module";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { AuditLogInterceptor } from "./common/interceptors/audit-log.interceptor";
+import { IdempotencyInterceptor } from "./common/interceptors/idempotency.interceptor";
 import { DealsModule } from "./deals/deals.module";
 import { CompaniesModule } from "./companies/companies.module";
 import { HealthController } from "./health.controller";
@@ -19,6 +20,8 @@ import { SegmentsModule } from "./segments/segments.module";
 import { SegmentsController } from "./segments/segments.controller";
 import { SegmentsService } from "./segments/segments.service";
 import { ContactsModule } from "./contacts/contacts.module";
+import { ProductsModule } from "./products/products.module";
+import { PipelinesModule } from "./pipelines/pipelines.module";
 
 const crmCrudModules = [
   ["RolesModule", "roles"],
@@ -26,7 +29,6 @@ const crmCrudModules = [
   ["LeadsModule", "leads"],
   ["ContactsModule", "contacts"],
   ["DealersModule", "dealers"],
-  ["PipelinesModule", "pipelines"],
   ["ActivitiesModule", "activities"],
   ["NotesModule", "notes"],
   ["TasksModule", "tasks"],
@@ -63,6 +65,8 @@ const queueModules = queueEnabled ? [
     DealsModule,
     CompaniesModule,
     ContactsModule,
+    ProductsModule,
+    PipelinesModule,
     SegmentsModule,
     AuditLogsModule,
     ...queueModules,
@@ -72,6 +76,7 @@ const queueModules = queueEnabled ? [
   providers: [
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     DashboardService,
     SegmentsService
   ]

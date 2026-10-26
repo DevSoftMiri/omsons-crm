@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   Upload,
   X,
+  MoreVertical,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -70,6 +71,7 @@ const emptyAdvanced: AdvancedFilters = {
   specKey: "",
   specValue: "",
 };
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -85,6 +87,9 @@ export function ProductsPage() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [actionProduct, setActionProduct] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
     {
       product: true,
@@ -99,13 +104,26 @@ export function ProductsPage() {
   const toolbarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    fetch("/omsons_catalog_2026-27.json")
-      .then((response) => response.json())
-      .then((data: Product[] | { products?: Product[] }) =>
-        setProducts(Array.isArray(data) ? data : (data.products ?? [])),
-      )
-      .catch(() => setProducts([]));
-  }, []);
+    fetch(`${API_URL}/products?archived=${showArchived}`)
+      .then((response) => { if (!response.ok) throw new Error("Products API unavailable"); return response.json(); })
+      .then((data: Product[]) => { if (!Array.isArray(data)) throw new Error("Invalid products response"); setProducts(data); })
+      .catch(() => fetch("/omsons_catalog_2026-27.json").then((response) => response.json()).then((data: Product[] | { products?: Product[] }) => setProducts(Array.isArray(data) ? data : (data.products ?? []))).catch(() => setProducts([])));
+  }, [showArchived]);
+  const productAction = async (product: Product, action: string, variantId?: string) => {
+    if (actionProduct) return;
+    setActionProduct(product.id);
+    try {
+      if (action === "archive" && !window.confirm(`Archive ${product.name}?`)) return;
+      const path = action === "duplicate" ? `${API_URL}/products/${product.id}/duplicate` : action === "archive" || action === "restore" ? `${API_URL}/products/${product.id}/${action}` : `${API_URL}/products/${product.id}/stock`;
+      const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(variantId ? { variantId } : {}) });
+      if (!response.ok) throw new Error("Product action failed");
+      const result = await response.json();
+      if (action === "duplicate") setProducts((current) => [result, ...current]);
+      else if (action === "archive") setProducts((current) => current.filter((item) => item.id !== product.id));
+      else if (action === "restore") setProducts((current) => current.filter((item) => item.id !== product.id));
+      else setProducts((current) => current.map((item) => item.id === product.id ? result : item));
+    } finally { setActionProduct(null); }
+  };
   useEffect(() => {
     const close = (event: MouseEvent) => {
       if (
@@ -263,6 +281,7 @@ export function ProductsPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button className={`rounded-md border px-4 py-2 text-sm font-semibold ${showArchived ? "border-[#ff5c35] bg-[#fff1eb] text-[#b84326]" : "border-[#b8c5d1]"}`} onClick={() => setShowArchived((value) => !value)} type="button">{showArchived ? "Active products" : "Archived products"}</button>
             <button
               className="inline-flex items-center gap-2 rounded-md border border-[#b8c5d1] px-4 py-2 text-sm font-semibold"
               type="button"
@@ -498,6 +517,10 @@ export function ProductsPage() {
                   open={expanded.has(product.id)}
                   onToggle={() => toggle(product.id)}
                   money={money(product)}
+                  archived={showArchived}
+                  busy={actionProduct === product.id}
+                  onEdit={() => setEditingProduct(product)}
+                  onAction={(action, variantId) => void productAction(product, action, variantId)}
                 />
               ))}
             </tbody>
@@ -532,8 +555,17 @@ export function ProductsPage() {
           }}
         />
       ) : null}
+      {editingProduct ? <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} onSaved={(product) => { setProducts((current) => current.map((item) => item.id === product.id ? product : item)); setEditingProduct(null); }} /> : null}
     </AppShell>
   );
+}
+
+function EditProductModal({ product, onClose, onSaved }: { product: Product; onClose: () => void; onSaved: (product: Product) => void }) {
+  const [name, setName] = useState(product.name);
+  const [category, setCategory] = useState(product.category ?? "");
+  const [saving, setSaving] = useState(false);
+  const save = async (event: React.FormEvent) => { event.preventDefault(); if (saving || !name.trim()) return; setSaving(true); try { const response = await fetch(`${API_URL}/products/${product.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ name: name.trim(), category: category.trim() || null, variants: product.variants }) }); if (!response.ok) throw new Error("Unable to update product"); onSaved(await response.json()); } finally { setSaving(false); } };
+  return <div className="fixed inset-0 z-[100] grid place-items-center bg-[#172235]/45 p-4"><form className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" onSubmit={save}><h2 className="mb-4 text-xl font-bold">Edit product</h2><label className="grid gap-1 text-sm font-semibold">Product name<input className="rounded-md border px-3 py-2" value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="mt-3 grid gap-1 text-sm font-semibold">Category<input className="rounded-md border px-3 py-2" value={category} onChange={(event) => setCategory(event.target.value)} /></label><h3 className="mt-5 font-bold">Variants</h3><div className="mt-2 max-h-48 overflow-auto rounded border">{(product.variants ?? []).map((variant) => <div className="flex justify-between border-b px-3 py-2 text-sm" key={variant.id}><span>{variant.name}</span><span>{variant.priceLabel ?? "--"}</span></div>)}</div><div className="mt-5 flex justify-end gap-2"><button className="rounded border px-4 py-2" onClick={onClose} type="button">Cancel</button><button className="rounded bg-[#006b70] px-4 py-2 font-semibold text-white" disabled={saving} type="submit">{saving ? "Saving..." : "Save product"}</button></div></form></div>;
 }
 
 function AddProductModal({
@@ -1171,11 +1203,19 @@ function ProductRow({
   open,
   onToggle,
   money,
+  archived,
+  busy,
+  onEdit,
+  onAction,
 }: {
   product: Product;
   open: boolean;
   onToggle: () => void;
   money: string;
+  archived: boolean;
+  busy: boolean;
+  onEdit: () => void;
+  onAction: (action: string, variantId?: string) => void;
 }) {
   return (
     <>
@@ -1223,6 +1263,15 @@ function ProductRow({
               ? "In stock"
               : "Out of stock"}
           </span>
+        </td>
+        <td className="relative px-3 py-4">
+          <button aria-label={`Actions for ${product.name}`} disabled={busy} onClick={(event) => { event.stopPropagation(); const menu = event.currentTarget.nextElementSibling; menu?.classList.toggle("hidden"); }} type="button"><MoreVertical className="h-5 w-5 text-[#1473e6]" /></button>
+          <div className="absolute right-3 top-12 z-30 hidden w-48 rounded-lg border border-[#dbe4ed] bg-white p-1 text-left shadow-xl">
+            {!archived ? <button className="block w-full rounded px-3 py-2 text-sm" onClick={onEdit} type="button">Edit product</button> : null}
+            {!archived ? <button className="block w-full rounded px-3 py-2 text-sm" onClick={() => onAction("duplicate")} type="button">Duplicate product</button> : null}
+            {!archived ? <button className="block w-full rounded px-3 py-2 text-sm" onClick={() => onAction("stock", product.variants?.[0]?.id)} type="button">Toggle stock</button> : null}
+            <button className="block w-full rounded px-3 py-2 text-sm" onClick={() => onAction(archived ? "restore" : "archive")} type="button">{archived ? "Restore product" : "Archive product"}</button>
+          </div>
         </td>
         <td className="px-3 py-4">⋮</td>
       </tr>

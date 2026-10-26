@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CompanyDto } from "./companies.dto";
 
@@ -42,8 +43,9 @@ export class CompaniesService {
   }
 
   private normalize(dto: CompanyDto) {
+    const { customFields, ...scalarFields } = dto;
     const regions = [...new Set((dto.regions ?? []).map((region) => region.trim()).filter(Boolean))];
-    return { ...dto, name: dto.name.trim(), regions, customFields: dto.customFields ?? {}, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
+    return { ...scalarFields, name: dto.name.trim(), regions, customFields: (customFields ?? {}) as Prisma.InputJsonObject, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
   }
 
   private async validateParent(id: string | undefined, parentCompanyId: string | null) {

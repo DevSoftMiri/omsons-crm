@@ -210,14 +210,30 @@ model Dealer {
 
 model PipelineStage {
   id        String   @id @default(cuid())
+  pipelineId String?
+  pipeline  Pipeline? @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   name      String
+  description String?
   order     Int
   color     String?
+  probability Int?
   leads     Lead[]
+  deals     Deal[] @relation("DealStageRecord")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([pipelineId, name])
+  @@index([pipelineId, order])
   @@index([order])
+}
+
+model Pipeline {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  stages    PipelineStage[]
+  deals     Deal[]         @relation("DealPipelineRecord")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
 
 model Lead {
@@ -258,6 +274,10 @@ model Deal {
   name            String
   pipeline        String    @default("Sales Pipeline")
   stage           String    @default("Appointment Scheduled")
+  pipelineId      String?
+  pipelineRecord  Pipeline?      @relation("DealPipelineRecord", fields: [pipelineId], references: [id])
+  stageId         String?
+  stageRecord     PipelineStage? @relation("DealStageRecord", fields: [stageId], references: [id])
   amount          Decimal?  @db.Decimal(12, 2)
   closeDate       DateTime?
   dealType        String?
@@ -278,6 +298,7 @@ model Deal {
   updatedAt       DateTime  @updatedAt
 
   @@index([pipeline, stage])
+  @@index([pipelineId, stageId])
   @@index([ownerId])
   @@index([closeDate])
   @@index([createdAt])
@@ -445,4 +466,58 @@ model Setting {
   value     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model IdempotencyRecord {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  status    Int
+  response  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model Product {
+  id              String           @id @default(cuid())
+  sku             String           @unique
+  slug            String           @unique
+  name            String
+  category        String?
+  categories      Json             @default("[]")
+  page            Int?
+  features        Json             @default("[]")
+  descriptionHtml String?
+  images          Json             @default("[]")
+  isArchived      Boolean          @default(false)
+  variants        ProductVariant[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([isArchived])
+}
+
+model ProductVariant {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku        String   @unique
+  name       String
+  slug       String?
+  specs      Json     @default("{}")
+  specsText  String?
+  pack       Int?
+  price      Decimal? @db.Decimal(14, 2)
+  priceLabel String?
+  priceBasis String?
+  inStock    Boolean  @default(false)
+  images     Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([productId])
+  @@index([inStock])
 }

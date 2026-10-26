@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { GripVertical, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 const input =
@@ -96,7 +97,7 @@ export function CompanyForm({
     try {
       const response = await fetch(`${API_URL}/companies`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: createHeaders(createIdempotencyKey()),
         body: JSON.stringify({
           ...form,
           customerType: form.type || undefined,

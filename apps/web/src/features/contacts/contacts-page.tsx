@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCountries, getCountryCallingCode } from "libphonenumber-js/max";
+import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
 import {
   CalendarDays,
   ChevronDown,
@@ -36,20 +37,7 @@ import {
 import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
 import { sortRecords } from "@/components/ui/sort-records";
 
-const contacts = [
-  {
-    id: "maria-johnson",
-    initials: "MJ",
-    name: "Maria Johnson",
-    email: "emailmaria@hubspot.com",
-  },
-  {
-    id: "brian-halligan",
-    initials: "BH",
-    name: "Brian Halligan",
-    email: "bh@hubspot.com",
-  },
-];
+const contacts: Array<{ id: string; initials: string; name: string; email: string }> = [];
 const contactSortOptions = [
   { value: "firstName", label: "First name" },
   { value: "lastName", label: "Last name" },
@@ -96,6 +84,13 @@ const purchaseRoleOptions = [
   ["Accounts Contact", "bg-amber-100 text-amber-700"],
   ["Primary Contact / Person In-charge", "bg-rose-100 text-rose-700"],
 ] as const;
+
+function getPurchaseRoleColor(role: string) {
+  return (
+    purchaseRoleOptions.find(([option]) => option === role)?.[1] ??
+    "bg-slate-100 text-slate-700"
+  );
+}
 
 export function ContactsPage() {
   const [activeSegment, setActiveSegment] = useState("All contacts");
@@ -333,20 +328,16 @@ export function ContactsPage() {
   );
 }
 
+type LegacyContactCard = { name: string; email: string; ago: string };
+
 function LegacyContactsBoard() {
-  const columns = [
+  const columns: Array<[string, string, string, LegacyContactCard[]]> = [
     ["Subscriber", "0", "bg-[#0878d1]", []],
     [
       "Lead",
       "1",
       "bg-[#e94b08]",
-      [
-        {
-          name: "Maria Johnson (Sample Contact)",
-          email: "emailmaria@hubspot.com",
-          ago: "7 days ago",
-        },
-      ],
+      [],
     ],
     ["Marketing Qualified Lead", "0", "bg-[#008b87]", []],
     ["Sales Qualified Lead", "0", "bg-[#d90088]", []],
@@ -354,18 +345,12 @@ function LegacyContactsBoard() {
       "Opportunity",
       "1",
       "bg-[#6d45d8]",
-      [
-        {
-          name: "Brian Halligan (Sample Contact)",
-          email: "bh@hubspot.com",
-          ago: "4 days ago",
-        },
-      ],
+      [],
     ],
     ["Customer", "0", "bg-[#1c8b5b]", []],
     ["Evangelist", "0", "bg-[#4774c7]", []],
     ["Other", "0", "bg-[#64748b]", []],
-  ] as const;
+  ];
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
       {columns.map(([title, count, color, cards]) => (
@@ -425,14 +410,7 @@ function SharedContactBoard({
       id: "lead",
       label: "Lead",
       color: "bg-[#e94b08]",
-      items: [
-        {
-          id: "maria-johnson",
-          name: "Maria Johnson (Sample Contact)",
-          email: "emailmaria@hubspot.com",
-          ago: "7 days ago",
-        },
-      ],
+      items: [],
     },
     {
       id: "marketing-qualified",
@@ -450,14 +428,7 @@ function SharedContactBoard({
       id: "opportunity",
       label: "Opportunity",
       color: "bg-[#6d45d8]",
-      items: [
-        {
-          id: "brian-halligan",
-          name: "Brian Halligan (Sample Contact)",
-          email: "bh@hubspot.com",
-          ago: "4 days ago",
-        },
-      ],
+      items: [],
     },
     { id: "customer", label: "Customer", color: "bg-[#1c8b5b]", items: [] },
     { id: "evangelist", label: "Evangelist", color: "bg-[#4774c7]", items: [] },
@@ -492,6 +463,9 @@ function SharedContactBoard({
             firstName: string;
             lastName?: string | null;
             email?: string | null;
+            title?: string | null;
+            department?: string | null;
+            roleInPurchase?: string | null;
             lifecycleStage?: string | null;
           }>) {
             const column = next.find(
@@ -503,6 +477,9 @@ function SharedContactBoard({
                 id: item.id,
                 name: `${item.firstName} ${item.lastName || ""}`.trim(),
                 email: item.email || "",
+                title: item.title || "",
+                department: item.department || "",
+                roleInPurchase: item.roleInPurchase || "",
                 ago: "Recently added",
               });
           }
@@ -576,7 +553,7 @@ function SharedContactBoard({
       "";
     const response = await fetch(`${API_URL}/contacts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createHeaders(createIdempotencyKey()),
       body: JSON.stringify({
         firstName: contact.firstName,
         lastName: contact.lastName,
@@ -605,6 +582,9 @@ function SharedContactBoard({
                   id: saved.id,
                   name: `${saved.firstName} ${saved.lastName || ""}`.trim(),
                   email: saved.email || "",
+                  title: saved.title || "",
+                  department: saved.department || "",
+                  roleInPurchase: saved.roleInPurchase || "",
                   ago: "Just now",
                 },
               ],
@@ -636,6 +616,35 @@ function SharedContactBoard({
             <p className="mt-3 text-sm text-[#006b70]">
               Email: {contact.email}
             </p>
+            {contact.title || contact.department || contact.roleInPurchase ? (
+              <dl className="mt-3 space-y-1 text-xs text-[#516f90]">
+                {contact.title ? (
+                  <div className="flex gap-2">
+                    <dt className="font-semibold text-[#345b78]">Job title:</dt>
+                    <dd className="min-w-0 truncate">{contact.title}</dd>
+                  </div>
+                ) : null}
+                {contact.department ? (
+                  <div className="flex gap-2">
+                    <dt className="font-semibold text-[#345b78]">Department:</dt>
+                    <dd className="min-w-0 truncate">{contact.department}</dd>
+                  </div>
+                ) : null}
+                {contact.roleInPurchase ? (
+                  <div className="flex gap-2">
+                    <dt className="font-semibold text-[#345b78]">Role in Purchase:</dt>
+                    <dd className="min-w-0 truncate">
+                      <span
+                        className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getPurchaseRoleColor(contact.roleInPurchase)}`}
+                        title={contact.roleInPurchase}
+                      >
+                        {contact.roleInPurchase}
+                      </span>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : null}
             <div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]">
               <span className="flex items-center gap-2">
                 <button
@@ -795,7 +804,7 @@ function AddContactModal({
     department?: string;
     roleInPurchase?: string;
     leadStatus?: string;
-  }) => void;
+  }) => Promise<void> | void;
 }) {
   const [form, setForm] = useState({
     email: "",
@@ -817,6 +826,7 @@ function AddContactModal({
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [stageOpenUp, setStageOpenUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const stageButtonRef = useRef<HTMLButtonElement>(null);
   const update = (field: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
@@ -866,12 +876,14 @@ function AddContactModal({
     >
       <form
         className="w-full max-w-[620px] rounded-xl bg-white shadow-2xl"
-        onSubmit={(event) => {
+          onSubmit={async (event) => {
           event.preventDefault();
-          onCreate({
+            if (submitting) return;
+            setSubmitting(true);
+            try { await onCreate({
             ...form,
             phone: phoneNumber ? `${phoneCode} ${phoneNumber}` : "",
-          });
+            }); } finally { setSubmitting(false); }
         }}
       >
         <div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4">
@@ -1066,9 +1078,10 @@ function AddContactModal({
           </button>
           <button
             className="rounded-md bg-[#006b70] px-5 py-2 text-white"
+            disabled={submitting}
             type="submit"
           >
-            Create
+            {submitting ? "Creating..." : "Create"}
           </button>
         </div>
       </form>
@@ -1176,28 +1189,14 @@ function LegacyDraggableContactsBoard() {
     {
       title: "Lead",
       color: "bg-[#e94b08]",
-      cards: [
-        {
-          id: "legacy-maria",
-          name: "Maria Johnson (Sample Contact)",
-          email: "emailmaria@hubspot.com",
-          ago: "7 days ago",
-        },
-      ],
+      cards: [],
     },
     { title: "Marketing Qualified Lead", color: "bg-[#008b87]", cards: [] },
     { title: "Sales Qualified Lead", color: "bg-[#d90088]", cards: [] },
     {
       title: "Opportunity",
       color: "bg-[#6d45d8]",
-      cards: [
-        {
-          id: "legacy-brian",
-          name: "Brian Halligan (Sample Contact)",
-          email: "bh@hubspot.com",
-          ago: "4 days ago",
-        },
-      ],
+      cards: [],
     },
     { title: "Customer", color: "bg-[#1c8b5b]", cards: [] },
     { title: "Evangelist", color: "bg-[#4774c7]", cards: [] },
@@ -1302,7 +1301,15 @@ function LegacyDraggableContactsBoard() {
   );
 }
 
-type ContactCard = { id: string; name: string; email: string; ago: string };
+type ContactCard = {
+  id: string;
+  name: string;
+  email: string;
+  title: string;
+  department: string;
+  roleInPurchase: string;
+  ago: string;
+};
 
 function ContactToolbar({
   activeSegment,

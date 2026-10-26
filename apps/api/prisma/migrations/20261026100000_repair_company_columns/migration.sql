@@ -1,0 +1,7 @@
+ALTER TABLE "Company"
+  ADD COLUMN IF NOT EXISTS "domainName" TEXT,
+  ADD COLUMN IF NOT EXISTS "postalCode" TEXT,
+  ADD COLUMN IF NOT EXISTS "numberOfEmployees" INTEGER,
+  ADD COLUMN IF NOT EXISTS "timeZone" TEXT,
+  ADD COLUMN IF NOT EXISTS "description" TEXT,
+  ADD COLUMN IF NOT EXISTS "linkedinCompanyPage" TEXT;

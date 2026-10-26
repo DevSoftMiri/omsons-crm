@@ -32,17 +32,17 @@ export class DealsService {
 
   async create(body: Record<string, unknown>) {
     if (typeof body.name !== "string" || !body.name.trim()) throw new BadRequestException("Deal name is required");
-    return this.prisma.deal.create({ data: this.data(body) as any, include: { owner: true, contact: true, company: true } });
+    return this.prisma.deal.create({ data: await this.data(body) as any, include: { owner: true, contact: true, company: true } });
   }
 
   async update(id: string, body: Record<string, unknown>) {
     if (!(await this.prisma.deal.findUnique({ where: { id } }))) throw new NotFoundException("Deal not found");
-    return this.prisma.deal.update({ where: { id }, data: this.data(body, true) as any, include: { owner: true, contact: true, company: true } });
+    return this.prisma.deal.update({ where: { id }, data: await this.data(body, true) as any, include: { owner: true, contact: true, company: true } });
   }
 
   remove(id: string) { return this.prisma.deal.delete({ where: { id } }); }
 
-  private data(body: Record<string, unknown>, partial = false) {
+  private async data(body: Record<string, unknown>, partial = false) {
     const data: Record<string, unknown> = {};
     for (const key of ["name", "pipeline", "stage", "dealType", "priority", "ownerId", "contactId", "companyId", "productCategory"]) if (body[key] !== undefined) data[key] = body[key];
     if (body.probability !== undefined) data.probability = body.probability === null || body.probability === "" ? null : Number(body.probability);
@@ -53,6 +53,24 @@ export class DealsService {
     if (body.closeDate !== undefined) data.closeDate = body.closeDate ? new Date(String(body.closeDate)) : null;
     if (body.lineItems !== undefined) data.lineItems = body.lineItems;
     if (!partial && !data.pipeline) data.pipeline = "Sales Pipeline";
+    const pipelineName = typeof data.pipeline === "string" ? data.pipeline : undefined;
+    const pipelineId = typeof body.pipelineId === "string" && body.pipelineId ? body.pipelineId : undefined;
+    const stageId = typeof body.stageId === "string" && body.stageId ? body.stageId : undefined;
+    const pipeline = pipelineId
+      ? await this.prisma.pipeline.findUnique({ where: { id: pipelineId }, include: { stages: { orderBy: { order: "asc" } } } })
+      : pipelineName
+        ? await this.prisma.pipeline.findUnique({ where: { name: pipelineName }, include: { stages: { orderBy: { order: "asc" } } } })
+        : null;
+    if (pipeline) {
+      data.pipelineId = pipeline.id;
+      data.pipeline = pipeline.name;
+      const selectedStage = stageId
+        ? pipeline.stages.find((item) => item.id === stageId)
+        : pipeline.stages.find((item) => item.name === data.stage) || pipeline.stages[0];
+      if (!selectedStage) throw new BadRequestException("Pipeline must have at least one stage");
+      data.stageId = selectedStage.id;
+      data.stage = selectedStage.name;
+    }
     return data;
   }
 }
