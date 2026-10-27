@@ -3,14 +3,35 @@ import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class DashboardService {
-  private readonly cache = new Map<string, { expiresAt: number; value: unknown }>();
+  private readonly cache = new Map<string, { expiresAt: number; staleUntil: number; value: unknown }>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly cacheTtlMs = 15_000;
+  private readonly staleTtlMs = 60_000;
 
   constructor(private readonly prisma: PrismaService) {}
 
   async summary(query: { period?: string; ownerId?: string; region?: string; pipeline?: string }) {
     const cacheKey = JSON.stringify({ period: query.period ?? "current-quarter", ownerId: query.ownerId ?? "", region: query.region ?? "", pipeline: query.pipeline ?? "" });
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const nowMs = Date.now();
+    if (cached && cached.expiresAt > nowMs) return cached.value;
+    if (cached && cached.staleUntil > nowMs) {
+      void this.refresh(cacheKey, query);
+      return cached.value;
+    }
+    return this.refresh(cacheKey, query);
+  }
+
+  private refresh(queryKey: string, query: { period?: string; ownerId?: string; region?: string; pipeline?: string }) {
+    const existing = this.inFlight.get(queryKey);
+    if (existing) return existing;
+    const request = this.loadSummary(query).finally(() => this.inFlight.delete(queryKey));
+    this.inFlight.set(queryKey, request);
+    return request;
+  }
+
+  private async loadSummary(query: { period?: string; ownerId?: string; region?: string; pipeline?: string }) {
+    const queryKey = JSON.stringify({ period: query.period ?? "current-quarter", ownerId: query.ownerId ?? "", region: query.region ?? "", pipeline: query.pipeline ?? "" });
     const db = this.prisma as any;
     const now = new Date();
     const start = this.periodStart(query.period ?? "current-quarter", now);
@@ -19,15 +40,15 @@ export class DashboardService {
     const baseDeal = { pipeline: query.pipeline || undefined, ownerId: query.ownerId || undefined, company: query.region ? { regions: { has: query.region } } : undefined };
     const openDealWhere = { ...baseDeal, stage: { notIn: ["Closed Won", "Closed Lost"] } };
     const dashboardQueries = await Promise.allSettled([
-      db.deal.findMany({ where: openDealWhere, select: { id: true, name: true, stage: true, amount: true, probability: true, closeDate: true, expectedCloseDate: true, productCategory: true, stageChangedAt: true, updatedAt: true, owner: { select: { id: true, name: true } }, company: { select: { id: true, name: true, regions: true, customerType: true } }, contact: { select: { id: true, firstName: true, lastName: true } } } }),
+      db.deal.findMany({ where: openDealWhere, select: { id: true, stage: true, amount: true, probability: true, productCategory: true, company: { select: { regions: true, customerType: true } } } }),
       db.lead.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined } }),
       db.company.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined, regions: query.region ? { has: query.region } : undefined } }),
       db.visit.count({ where: { visitedAt: { gte: start, lt: end }, userId: query.ownerId || undefined } }),
-      db.task.findMany({ where: { doneAt: null, assigneeId: query.ownerId || undefined, dueAt: { not: null } }, orderBy: { dueAt: "asc" }, take: 20, include: { assignee: { select: { id: true, name: true } }, lead: { select: { id: true, title: true } } } }),
-      db.followUp.findMany({ where: { completedAt: null, ownerId: query.ownerId || undefined }, orderBy: { dueAt: "asc" }, take: 20, include: { owner: { select: { id: true, name: true } }, lead: { select: { id: true, title: true } } } }),
+      db.task.findMany({ where: { doneAt: null, assigneeId: query.ownerId || undefined, dueAt: { not: null } }, orderBy: { dueAt: "asc" }, take: 20, select: { id: true, title: true, dueAt: true, lead: { select: { id: true, title: true } } } }),
+      db.followUp.findMany({ where: { completedAt: null, ownerId: query.ownerId || undefined }, orderBy: { dueAt: "asc" }, take: 20, select: { id: true, title: true, dueAt: true, lead: { select: { id: true, title: true } } } }),
       db.deal.findMany({ where: { ...baseDeal, stage: { notIn: ["Closed Won", "Closed Lost"] }, OR: [{ closeDate: { gte: now, lt: monthEnd } }, { expectedCloseDate: { gte: now, lt: monthEnd } }] }, orderBy: { closeDate: "asc" }, take: 10, select: { id: true, name: true, amount: true, stage: true, closeDate: true, expectedCloseDate: true, company: { select: { id: true, name: true } } } }),
       db.company.findMany({ where: { isArchived: false, ownerId: query.ownerId || undefined, regions: query.region ? { has: query.region } : undefined }, orderBy: { updatedAt: "desc" }, take: 8, select: { id: true, name: true, regions: true, customerType: true, updatedAt: true, owner: { select: { id: true, name: true } }, deals: { where: { stage: { notIn: ["Closed Won", "Closed Lost"] } }, select: { amount: true } } } }),
-      db.activity.findMany({ orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } }, lead: { select: { id: true, title: true } } } }),
+      db.activity.findMany({ orderBy: { createdAt: "desc" }, take: 12, select: { id: true, type: true, subject: true, createdAt: true, user: { select: { id: true, name: true } } } }),
     ]);
     const failedQueries = dashboardQueries.filter((query) => query.status === "rejected");
     if (failedQueries.length) {
@@ -43,7 +64,7 @@ export class DashboardService {
     const pendingFollowUps = followUps.filter((item: any) => new Date(item.dueAt) >= today && new Date(item.dueAt) < tomorrow);
     const pipeline = this.groupDeals(openDeals);
     const result = { period: query.period ?? "current-quarter", range: { start, end }, metrics: { openPipelineValue: this.amount(openDeals), openDealCount: openDeals.length, newLeads, newCompanies, dealerVisits: visits, followUpsDueToday: pendingFollowUps.length, overdueTasks: overdueTasks.length, dealsClosingThisMonth: closingDeals.length }, pipeline, recentCompanies: recentCompanies.map((company: any) => ({ ...company, openDealValue: this.amount(company.deals) })), pendingWork: { overdueTasks, todayTasks, upcomingFollowUps: followUps.filter((item: any) => new Date(item.dueAt) >= tomorrow).slice(0, 10), closingDeals }, recentActivity: activities, insights: { byRegion: this.groupDeals(openDeals, (deal: any) => deal.company?.regions?.[0] || "Unassigned"), byCustomerType: this.groupDeals(openDeals, (deal: any) => deal.company?.customerType || "Unassigned"), byProductCategory: this.groupDeals(openDeals, (deal: any) => deal.productCategory || "Unassigned") } };
-    this.cache.set(cacheKey, { expiresAt: Date.now() + 15000, value: result });
+    this.cache.set(queryKey, { expiresAt: Date.now() + this.cacheTtlMs, staleUntil: Date.now() + this.staleTtlMs, value: result });
     return result;
   }
 

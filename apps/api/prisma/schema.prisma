@@ -8,53 +8,28 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum LeadStatus {
-  NEW
-  CONTACTED
-  QUALIFIED
-  PROPOSAL
-  WON
-  LOST
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum ActivityType {
-  CALL
-  EMAIL
-  MEETING
-  NOTE
-  VISIT
-  TASK
-}
-
 model User {
-  id                String     @id @default(cuid())
-  email             String     @unique
-  passwordHash      String
-  name              String
-  phone             String?
-  refreshTokenHash  String?
-  isActive          Boolean    @default(true)
-  roles             UserRole[]
-  assignedLeads     Lead[]     @relation("LeadOwner")
-  ownedDeals        Deal[]     @relation("DealOwner")
-  ownedCompanies    Company[]  @relation("CompanyOwner")
-  ownedContacts     Contact[]  @relation("ContactOwner")
-  activities        Activity[]
-  notes             Note[]
-  tasks             Task[]
-  followUps         FollowUp[]
-  visits            Visit[]
-  createdSegments   Segment[]  @relation("SegmentCreator")
-  auditLogs         AuditLog[] @relation("AuditActor")
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id               String     @id @default(cuid())
+  email            String     @unique
+  passwordHash     String
+  name             String
+  phone            String?
+  refreshTokenHash String?
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  activities       Activity[]
+  auditLogs        AuditLog[] @relation("AuditActor")
+  ownedCompanies   Company[]  @relation("CompanyOwner")
+  ownedContacts    Contact[]  @relation("ContactOwner")
+  ownedDeals       Deal[]     @relation("DealOwner")
+  followUps        FollowUp[]
+  assignedLeads    Lead[]     @relation("LeadOwner")
+  notes            Note[]
+  createdSegments  Segment[]  @relation("SegmentCreator")
+  tasks            Task[]
+  roles            UserRole[]
+  visits           Visit[]
 
   @@index([email])
   @@index([isActive])
@@ -64,10 +39,10 @@ model Role {
   id          String           @id @default(cuid())
   name        String           @unique
   description String?
-  users       UserRole[]
-  permissions RolePermission[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
+  users       UserRole[]
 }
 
 model Permission {
@@ -75,9 +50,9 @@ model Permission {
   action      String
   subject     String
   description String?
-  roles       RolePermission[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  roles       RolePermission[]
 
   @@unique([action, subject])
   @@index([subject])
@@ -86,10 +61,10 @@ model Permission {
 model UserRole {
   userId    String
   roleId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
 }
@@ -97,52 +72,52 @@ model UserRole {
 model RolePermission {
   roleId       String
   permissionId String
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
 }
 
 model Company {
-  id              String    @id @default(cuid())
-  name            String
-  domainName      String?
-  industry        String?
-  website         String?
-  phone           String?
-  city            String?
-  state           String?
-  postalCode      String?
-  country         String    @default("India")
-  numberOfEmployees Int?
-  timeZone        String?
-  description     String?
-  linkedinCompanyPage String?
-  customFields     Json      @default("{}")
-  regions         String[]  @default([])
-  customerType    String?
-  companySize     String?
-  annualRevenue   Decimal?  @db.Decimal(14, 2)
-  customerSince   DateTime?
-  targetAccount   Boolean   @default(false)
-  idealCustomerProfileTier String?
-  numberOfBlockers Int       @default(0)
-  numberOfBuyingRoleContacts Int @default(0)
-  numberOfDecisionMakers Int   @default(0)
-  parentCompanyId String?
-  ownerId         String?
-  owner           User?     @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  isArchived      Boolean   @default(false)
-  parentCompany   Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id], onDelete: SetNull)
-  subCompanies    Company[] @relation("CompanyHierarchy")
-  contacts        Contact[]
-  leads           Lead[]
-  deals           Deal[]
-  dealers         Dealer[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                         String    @id @default(cuid())
+  name                       String
+  industry                   String?
+  website                    String?
+  city                       String?
+  state                      String?
+  country                    String    @default("India")
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  regions                    String[]  @default([])
+  parentCompanyId            String?
+  ownerId                    String?
+  isArchived                 Boolean   @default(false)
+  phone                      String?
+  annualRevenue              Decimal?  @db.Decimal(14, 2)
+  companySize                String?
+  customerSince              DateTime?
+  customerType               String?
+  targetAccount              Boolean   @default(false)
+  idealCustomerProfileTier   String?
+  numberOfBlockers           Int       @default(0)
+  numberOfBuyingRoleContacts Int       @default(0)
+  numberOfDecisionMakers     Int       @default(0)
+  customFields               Json      @default("{}")
+  domainName                 String?
+  postalCode                 String?
+  numberOfEmployees          Int?
+  timeZone                   String?
+  description                String?
+  linkedinCompanyPage        String?
+  owner                      User?     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  parentCompany              Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id])
+  subCompanies               Company[] @relation("CompanyHierarchy")
+  contacts                   Contact[]
+  deals                      Deal[]
+  dealers                    Dealer[]
+  leads                      Lead[]
 
   @@index([name])
   @@index([city, state])
@@ -155,29 +130,29 @@ model Company {
 }
 
 model Contact {
-  id        String     @id @default(cuid())
-  firstName String
-  lastName  String?
-  email     String?
-  phone     String?
-  title     String?
-  department String?
-  roleInPurchase String?
-  ownerId   String?
-  owner     User?      @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  lifecycleStage String?
-  leadStatus String?
+  id              String     @id @default(cuid())
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  title           String?
+  companyId       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  ownerId         String?
+  lifecycleStage  String?
+  leadStatus      String?
+  contactSource   String?
   lastContactedAt DateTime?
-  nextFollowUpAt DateTime?
-  contactSource String?
-  companyId String?
-  company   Company?   @relation(fields: [companyId], references: [id])
-  leads     Lead[]
-  deals     Deal[]
-  activities Activity[]
-  notes     Note[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  nextFollowUpAt  DateTime?
+  department      String?
+  roleInPurchase  String?
+  activities      Activity[]
+  company         Company?   @relation(fields: [companyId], references: [id])
+  owner           User?      @relation("ContactOwner", fields: [ownerId], references: [id])
+  deals           Deal[]
+  leads           Lead[]
+  notes           Note[]
 
   @@index([email])
   @@index([phone])
@@ -191,36 +166,36 @@ model Contact {
 }
 
 model Dealer {
-  id        String    @id @default(cuid())
-  code      String?   @unique
+  id        String   @id @default(cuid())
+  code      String?  @unique
   name      String
   region    String?
   city      String?
   state     String?
   companyId String?
-  company   Company?  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company? @relation(fields: [companyId], references: [id])
   leads     Lead[]
   visits    Visit[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
 
   @@index([name])
   @@index([region])
 }
 
 model PipelineStage {
-  id        String   @id @default(cuid())
-  pipelineId String?
-  pipeline  Pipeline? @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  name      String
+  id          String    @id @default(cuid())
+  name        String
+  order       Int
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  pipelineId  String?
   description String?
-  order     Int
-  color     String?
   probability Int?
-  leads     Lead[]
-  deals     Deal[] @relation("DealStageRecord")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  deals       Deal[]    @relation("DealStageRecord")
+  leads       Lead[]
+  pipeline    Pipeline? @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
 
   @@unique([pipelineId, name])
   @@index([pipelineId, order])
@@ -228,12 +203,12 @@ model PipelineStage {
 }
 
 model Pipeline {
-  id        String         @id @default(cuid())
-  name      String         @unique
+  id        String          @id @default(cuid())
+  name      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  deals     Deal[]          @relation("DealPipelineRecord")
   stages    PipelineStage[]
-  deals     Deal[]         @relation("DealPipelineRecord")
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
 }
 
 model Lead {
@@ -245,22 +220,22 @@ model Lead {
   source          String?
   expectedCloseAt DateTime?
   ownerId         String?
-  owner           User?          @relation("LeadOwner", fields: [ownerId], references: [id])
   companyId       String?
-  company         Company?       @relation(fields: [companyId], references: [id])
   contactId       String?
-  contact         Contact?       @relation(fields: [contactId], references: [id])
   dealerId        String?
-  dealer          Dealer?        @relation(fields: [dealerId], references: [id])
   stageId         String?
-  stage           PipelineStage? @relation(fields: [stageId], references: [id])
-  activities      Activity[]
-  notes           Note[]
-  tasks           Task[]
-  followUps       FollowUp[]
-  files           FileAsset[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  activities      Activity[]
+  files           FileAsset[]
+  followUps       FollowUp[]
+  company         Company?       @relation(fields: [companyId], references: [id])
+  contact         Contact?       @relation(fields: [contactId], references: [id])
+  dealer          Dealer?        @relation(fields: [dealerId], references: [id])
+  owner           User?          @relation("LeadOwner", fields: [ownerId], references: [id])
+  stage           PipelineStage? @relation(fields: [stageId], references: [id])
+  notes           Note[]
+  tasks           Task[]
 
   @@index([status])
   @@index([priority])
@@ -270,32 +245,32 @@ model Lead {
 }
 
 model Deal {
-  id              String    @id @default(cuid())
-  name            String
-  pipeline        String    @default("Sales Pipeline")
-  stage           String    @default("Appointment Scheduled")
-  pipelineId      String?
-  pipelineRecord  Pipeline?      @relation("DealPipelineRecord", fields: [pipelineId], references: [id])
-  stageId         String?
-  stageRecord     PipelineStage? @relation("DealStageRecord", fields: [stageId], references: [id])
-  amount          Decimal?  @db.Decimal(12, 2)
-  closeDate       DateTime?
-  dealType        String?
-  priority        Priority  @default(MEDIUM)
-  probability     Int?
+  id                String         @id @default(cuid())
+  name              String
+  pipeline          String         @default("Sales Pipeline")
+  stage             String         @default("Appointment Scheduled")
+  amount            Decimal?       @db.Decimal(12, 2)
+  closeDate         DateTime?
+  dealType          String?
+  priority          Priority       @default(MEDIUM)
+  ownerId           String?
+  contactId         String?
+  companyId         String?
+  lineItems         Json           @default("[]")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
   expectedCloseDate DateTime?
-  productCategory String?
-  stageChangedAt  DateTime? 
-  lastActivityAt  DateTime?
-  ownerId         String?
-  owner           User?     @relation("DealOwner", fields: [ownerId], references: [id])
-  contactId       String?
-  contact         Contact?  @relation(fields: [contactId], references: [id])
-  companyId       String?
-  company         Company?  @relation(fields: [companyId], references: [id])
-  lineItems       Json      @default("[]")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  lastActivityAt    DateTime?
+  probability       Int?
+  productCategory   String?
+  stageChangedAt    DateTime?
+  pipelineId        String?
+  stageId           String?
+  company           Company?       @relation(fields: [companyId], references: [id])
+  contact           Contact?       @relation(fields: [contactId], references: [id])
+  owner             User?          @relation("DealOwner", fields: [ownerId], references: [id])
+  pipelineRecord    Pipeline?      @relation("DealPipelineRecord", fields: [pipelineId], references: [id])
+  stageRecord       PipelineStage? @relation("DealStageRecord", fields: [stageId], references: [id])
 
   @@index([pipeline, stage])
   @@index([pipelineId, stageId])
@@ -315,13 +290,13 @@ model Activity {
   subject   String
   body      String?
   leadId    String?
-  lead      Lead?        @relation(fields: [leadId], references: [id])
   contactId String?
-  contact   Contact?     @relation(fields: [contactId], references: [id])
   userId    String?
-  user      User?        @relation(fields: [userId], references: [id])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+  contact   Contact?     @relation(fields: [contactId], references: [id])
+  lead      Lead?        @relation(fields: [leadId], references: [id])
+  user      User?        @relation(fields: [userId], references: [id])
 
   @@index([type])
   @@index([createdAt])
@@ -331,43 +306,43 @@ model Note {
   id        String   @id @default(cuid())
   body      String
   leadId    String?
-  lead      Lead?    @relation(fields: [leadId], references: [id])
   contactId String?
-  contact   Contact? @relation(fields: [contactId], references: [id])
   authorId  String?
-  author    User?    @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  author    User?    @relation(fields: [authorId], references: [id])
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  lead      Lead?    @relation(fields: [leadId], references: [id])
 }
 
 model Task {
-  id        String    @id @default(cuid())
-  title     String
-  dueAt     DateTime?
-  priority  Priority  @default(MEDIUM)
-  doneAt    DateTime?
-  leadId    String?
-  lead      Lead?     @relation(fields: [leadId], references: [id])
+  id         String    @id @default(cuid())
+  title      String
+  dueAt      DateTime?
+  priority   Priority  @default(MEDIUM)
+  doneAt     DateTime?
+  leadId     String?
   assigneeId String?
-  assignee  User?     @relation(fields: [assigneeId], references: [id])
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  assignee   User?     @relation(fields: [assigneeId], references: [id])
+  lead       Lead?     @relation(fields: [leadId], references: [id])
 
   @@index([dueAt])
   @@index([doneAt])
 }
 
 model FollowUp {
-  id        String    @id @default(cuid())
-  title     String
-  dueAt     DateTime
+  id          String    @id @default(cuid())
+  title       String
+  dueAt       DateTime
   completedAt DateTime?
-  leadId    String?
-  lead      Lead?     @relation(fields: [leadId], references: [id])
-  ownerId   String?
-  owner     User?     @relation(fields: [ownerId], references: [id])
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  leadId      String?
+  ownerId     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  owner       User?     @relation(fields: [ownerId], references: [id])
 
   @@index([dueAt])
   @@index([completedAt])
@@ -379,11 +354,11 @@ model Visit {
   visitedAt DateTime
   location  String?
   dealerId  String?
-  dealer    Dealer?  @relation(fields: [dealerId], references: [id])
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  dealer    Dealer?  @relation(fields: [dealerId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([visitedAt])
 }
@@ -397,12 +372,6 @@ model Report {
   updatedAt DateTime @updatedAt
 }
 
-enum SegmentObject {
-  COMPANY
-  CONTACT
-  DEAL
-}
-
 model Segment {
   id          String        @id @default(cuid())
   name        String
@@ -411,9 +380,9 @@ model Segment {
   filters     Json          @default("{}")
   isDeleted   Boolean       @default(false)
   createdById String?
-  createdBy   User?         @relation("SegmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  createdBy   User?         @relation("SegmentCreator", fields: [createdById], references: [id])
 
   @@index([objectType])
   @@index([isDeleted])
@@ -428,21 +397,21 @@ model FileAsset {
   size      Int
   url       String
   leadId    String?
-  lead      Lead?    @relation(fields: [leadId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  lead      Lead?    @relation(fields: [leadId], references: [id])
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
-  actor     User?    @relation("AuditActor", fields: [actorId], references: [id])
   action    String
   entity    String
   entityId  String?
   metadata  Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([actorId])
   @@index([entity, entityId])
@@ -491,9 +460,9 @@ model Product {
   descriptionHtml String?
   images          Json             @default("[]")
   isArchived      Boolean          @default(false)
-  variants        ProductVariant[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  variants        ProductVariant[]
 
   @@index([name])
   @@index([category])
@@ -503,7 +472,6 @@ model Product {
 model ProductVariant {
   id         String   @id @default(cuid())
   productId  String
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   sku        String   @unique
   name       String
   slug       String?
@@ -517,7 +485,39 @@ model ProductVariant {
   images     Json     @default("[]")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([inStock])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  VISIT
+  TASK
+}
+
+enum SegmentObject {
+  COMPANY
+  CONTACT
+  DEAL
 }

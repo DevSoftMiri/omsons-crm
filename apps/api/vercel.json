@@ -2,6 +2,16 @@
   "version": 2,
   "buildCommand": "npm run vercel-build",
   "installCommand": "npm install --include=dev",
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, Idempotency-Key" }
+      ]
+    }
+  ],
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 30

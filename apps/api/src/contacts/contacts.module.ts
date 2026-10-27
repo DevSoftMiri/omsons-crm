@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Module, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Module, NotFoundException, Param, Post, Query } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -25,6 +25,36 @@ class ContactsController {
       },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  @Get(":id")
+  async findOne(@Param("id") id: string) {
+    const contact = await this.prisma.contact.findUnique({
+      where: { id },
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true,
+        title: true, department: true, roleInPurchase: true, lifecycleStage: true,
+        leadStatus: true, contactSource: true, lastContactedAt: true, nextFollowUpAt: true,
+        createdAt: true, updatedAt: true,
+        owner: { select: { id: true, name: true } },
+        company: {
+          select: {
+            id: true, name: true, industry: true, phone: true, city: true, state: true,
+            country: true, owner: { select: { id: true, name: true } },
+          },
+        },
+        deals: {
+          orderBy: { updatedAt: "desc" }, take: 20,
+          select: { id: true, name: true, stage: true, amount: true, closeDate: true, pipeline: true },
+        },
+        activities: {
+          orderBy: { createdAt: "desc" }, take: 50,
+          select: { id: true, type: true, subject: true, body: true, createdAt: true, user: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    if (!contact) throw new NotFoundException("Contact not found");
+    return contact;
   }
 
   @Post()

@@ -3,9 +3,36 @@ import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class DealsService {
+  private readonly cache = new Map<string, { expiresAt: number; value: unknown }>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly cacheTtlMs = 10_000;
+
   constructor(private readonly prisma: PrismaService) {}
 
   list(query: Record<string, string>) {
+    const cacheKey = JSON.stringify({
+      pipeline: query.pipeline ?? "",
+      stage: query.stage ?? "",
+      ownerId: query.ownerId ?? "",
+      search: query.search?.trim() ?? "",
+      sortBy: query.sortBy ?? "createdAt",
+      sortOrder: query.sortOrder ?? "desc",
+    });
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+    const existing = this.inFlight.get(cacheKey);
+    if (existing) return existing;
+    const request = this.queryDeals(query)
+      .then((value) => {
+        this.cache.set(cacheKey, { expiresAt: Date.now() + this.cacheTtlMs, value });
+        return value;
+      })
+      .finally(() => this.inFlight.delete(cacheKey));
+    this.inFlight.set(cacheKey, request);
+    return request;
+  }
+
+  private async queryDeals(query: Record<string, string>) {
     const search = query.search?.trim();
     const allowedSorts = ["name", "amount", "stage", "pipeline", "closeDate", "createdAt", "updatedAt", "priority", "probability", "expectedCloseDate", "productCategory", "lastActivityAt"];
     const sortBy = allowedSorts.includes(query.sortBy) ? query.sortBy : "createdAt";
@@ -23,24 +50,36 @@ export class DealsService {
         expectedCloseDate: true, productCategory: true, stageChangedAt: true, lastActivityAt: true,
         contactId: true, companyId: true, createdAt: true, updatedAt: true,
         owner: { select: { id: true, name: true } },
-        contact: { select: { id: true, firstName: true, lastName: true, email: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
         company: { select: { id: true, name: true } }
       },
-      orderBy: { [sortBy]: sortOrder }
+      orderBy: [{ [sortBy]: sortOrder }, { id: "asc" }]
     });
+  }
+
+  private invalidateCache() {
+    this.cache.clear();
   }
 
   async create(body: Record<string, unknown>) {
     if (typeof body.name !== "string" || !body.name.trim()) throw new BadRequestException("Deal name is required");
-    return this.prisma.deal.create({ data: await this.data(body) as any, include: { owner: true, contact: true, company: true } });
+    const result = await this.prisma.deal.create({ data: await this.data(body) as any, include: { owner: true, contact: true, company: true } });
+    this.invalidateCache();
+    return result;
   }
 
   async update(id: string, body: Record<string, unknown>) {
     if (!(await this.prisma.deal.findUnique({ where: { id } }))) throw new NotFoundException("Deal not found");
-    return this.prisma.deal.update({ where: { id }, data: await this.data(body, true) as any, include: { owner: true, contact: true, company: true } });
+    const result = await this.prisma.deal.update({ where: { id }, data: await this.data(body, true) as any, include: { owner: true, contact: true, company: true } });
+    this.invalidateCache();
+    return result;
   }
 
-  remove(id: string) { return this.prisma.deal.delete({ where: { id } }); }
+  async remove(id: string) {
+    const result = await this.prisma.deal.delete({ where: { id } });
+    this.invalidateCache();
+    return result;
+  }
 
   private async data(body: Record<string, unknown>, partial = false) {
     const data: Record<string, unknown> = {};

@@ -27,7 +27,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
 import { sortRecords } from "@/components/ui/sort-records";
 
@@ -114,6 +114,8 @@ export function DealsPage() {
   const [dealName, setDealName] = useState("");
   const [dealAmount, setDealAmount] = useState("");
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [dealsLoading, setDealsLoading] = useState(true);
+  const [dealsRefreshing, setDealsRefreshing] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -125,14 +127,17 @@ export function DealsPage() {
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
   const [pipelineSearch, setPipelineSearch] = useState("");
   const [pipelineManagerOpen, setPipelineManagerOpen] = useState(false);
+  const [confettiKey, setConfettiKey] = useState(0);
 
   const selectedPipeline = (Array.isArray(pipelines) ? pipelines : []).find(
     (item) => item.id === selectedPipelineId,
   );
-  const loadDeals = async (pipelineName?: string) => {
+  const loadDeals = useCallback(async (pipelineName?: string, signal?: AbortSignal) => {
+    if (deals.length) setDealsRefreshing(true); else setDealsLoading(true);
     try {
       const response = await fetch(
         `${API_URL}/deals${pipelineName ? `?pipeline=${encodeURIComponent(pipelineName)}` : ""}`,
+        { signal },
       );
       if (!response.ok) return;
       const payload = (await response.json()) as unknown;
@@ -143,10 +148,13 @@ export function DealsPage() {
           : [];
       setDeals(records);
       setDealCount(records.length);
-    } catch {
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       /* API may be unavailable while the web app is running alone. */
+    } finally {
+      if (!signal?.aborted) { setDealsLoading(false); setDealsRefreshing(false); }
     }
-  };
+  }, [deals.length]);
 
   useEffect(() => {
     void fetch(`${API_URL}/pipelines`)
@@ -162,15 +170,16 @@ export function DealsPage() {
           records.find((item) => item.name === "Sales Pipeline") ?? records[0];
         if (defaultPipeline) {
           setSelectedPipelineId(defaultPipeline.id);
-          void loadDeals(defaultPipeline.name);
         }
       })
-      .catch(() => void loadDeals());
+      .catch(() => setPipelines([]));
   }, []);
   useEffect(() => {
-    if (selectedPipeline) void loadDeals(selectedPipeline.name);
-  }, [selectedPipelineId]);
-  const sortedDeals = sortRecords(deals, sortBy, sortDirection, (deal, key) =>
+    const controller = new AbortController();
+    void loadDeals(selectedPipeline?.name, controller.signal);
+    return () => controller.abort();
+  }, [loadDeals, selectedPipeline?.name]);
+  const sortedDeals = useMemo(() => sortRecords(deals, sortBy, sortDirection, (deal, key) =>
     key === "owner"
       ? deal.owner?.name
       : key === "company"
@@ -183,12 +192,11 @@ export function DealsPage() {
               ? deal.stageChangedAt
                 ? Date.now() - new Date(deal.stageChangedAt).getTime()
                 : null
-              : deal[key as keyof Deal],
-  );
+              : deal[key as keyof Deal]), [deals, sortBy, sortDirection]);
 
   return (
     <AppShell>
-      <CrmPageFrame className="p-4">
+      <CrmPageFrame aria-busy={dealsLoading} className="p-4">
         <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-medium text-[#111827]">Deals</h1>
@@ -404,6 +412,7 @@ export function DealsPage() {
             onCreateNote={() => setNoteOpen(true)}
             onDealsChange={setDeals}
             stages={selectedPipeline?.stages ?? []}
+            onDealWon={() => setConfettiKey((key) => key + 1)}
           />
         ) : (
           <DealsTableEmpty deals={sortedDeals} />
@@ -414,7 +423,7 @@ export function DealsPage() {
             {dealCount} deals
           </span>
           <div className="flex items-center gap-3">
-            <CircleButton icon={RefreshCw} label="Refresh" />
+            <CircleButton icon={RefreshCw} label="Refresh" onClick={() => void loadDeals(selectedPipeline?.name)} spinning={dealsRefreshing} />
             <button className="inline-flex items-center gap-2 rounded-full border border-[#dbe4ed] px-5 py-3 text-sm font-bold">
               <Download className="h-4 w-4" />
               Export
@@ -423,6 +432,7 @@ export function DealsPage() {
           </div>
         </div>
       </CrmPageFrame>
+      <ConfettiCelebration trigger={confettiKey} />
       {createOpen ? (
         <CreateDealModal
           error={createError}
@@ -920,12 +930,22 @@ function CreateDealModal({
   );
 }
 
+function ConfettiCelebration({ trigger }: { trigger: number }) {
+  const [visible, setVisible] = useState(false);
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const particles = useMemo(() => Array.from({ length: 72 }, (_, index) => ({ id: index, startX: `${(index % 25) * 42 - 500 + ((index * 17) % 30)}px`, color: ["#ff6848", "#1683ff", "#f5b700", "#18a566", "#8b5cf6"][index % 5], delay: `${(index % 9) * 45}ms`, duration: `${1350 + (index % 7) * 120}ms`, width: `${8 + (index % 5) * 1.5}px`, height: `${12 + (index % 5) * 2}px`, shape: index % 3 === 0 ? "999px" : index % 3 === 1 ? "2px" : "1px 4px 1px 4px" })), []);
+  useEffect(() => { if (!trigger || reducedMotion) return; setVisible(true); const timer = window.setTimeout(() => setVisible(false), 2400); return () => window.clearTimeout(timer); }, [trigger, reducedMotion]);
+  if (!visible || reducedMotion) return null;
+  return <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0 overflow-visible"><style>{`@keyframes deal-confetti-fall { 0% { transform: translate3d(var(--start-x), -24px, 0) rotate3d(0.2, 1, 0.1, 0deg) scale(0.65); opacity: 0; } 8% { opacity: 1; } 45% { transform: translate3d(calc(var(--start-x) + var(--drift-half)), 48vh, 0) rotate3d(0.2, 1, 0.1, var(--spin-half)) scale(1); } 100% { transform: translate3d(calc(var(--start-x) + var(--drift)), 104vh, 0) rotate3d(0.2, 1, 0.1, var(--spin)) scale(0.9); opacity: 0; } }`}</style>{particles.map((particle) => <span key={`${trigger}-${particle.id}`} className="absolute left-1/2 top-0 block" style={{ width: particle.width, height: particle.height, borderRadius: particle.shape, backgroundColor: particle.color, boxShadow: `0 0 1px ${particle.color}`, willChange: "transform, opacity", animation: `deal-confetti-fall ${particle.duration} cubic-bezier(.18,.75,.35,1) ${particle.delay} forwards`, ["--start-x" as string]: particle.startX, ["--drift-half" as string]: `${((particle.id % 23) * 45 - 500) / 2}px`, ["--drift" as string]: `${(particle.id % 23) * 45 - 500}px`, ["--spin-half" as string]: `${180 + (particle.id % 5) * 90}deg`, ["--spin" as string]: `${540 + (particle.id % 7) * 180}deg` }} />)}</div>;
+}
+
 function DealsBoard({
   onCreateDeal,
   onCreateTask,
   onCreateNote,
   deals,
   onDealsChange,
+  onDealWon,
   stages: pipelineStages,
 }: {
   onCreateDeal: () => void;
@@ -933,6 +953,7 @@ function DealsBoard({
   onCreateNote: () => void;
   deals: Deal[];
   onDealsChange: (deals: Deal[]) => void;
+  onDealWon?: () => void;
   stages: PipelineStage[];
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -962,6 +983,7 @@ function DealsBoard({
         body: JSON.stringify({ stage }),
       });
       if (!response.ok) throw new Error("Unable to move deal");
+      if (deal.stage !== "Closed Won" && stage === "Closed Won") onDealWon?.();
     } catch {
       onDealsChange(previous);
     }
@@ -2053,17 +2075,22 @@ function DealsTableEmpty({ deals }: { deals: Deal[] }) {
 function CircleButton({
   icon: Icon,
   label,
+  onClick,
+  spinning = false,
 }: {
   icon: typeof Plus;
   label: string;
+  onClick?: () => void;
+  spinning?: boolean;
 }) {
   return (
     <button
       className="grid h-10 w-10 place-items-center rounded-full border border-[#dbe4ed] bg-white text-[#213343]"
       aria-label={label}
+      onClick={onClick}
       type="button"
     >
-      <Icon className="h-4 w-4" />
+      <Icon className={`h-4 w-4 ${spinning ? "animate-spin" : ""}`} />
     </button>
   );
 }

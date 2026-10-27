@@ -14,8 +14,7 @@ import { IdempotencyInterceptor } from "./common/interceptors/idempotency.interc
 import { DealsModule } from "./deals/deals.module";
 import { CompaniesModule } from "./companies/companies.module";
 import { HealthController } from "./health.controller";
-import { DashboardController } from "./dashboard/dashboard.controller";
-import { DashboardService } from "./dashboard/dashboard.service";
+import { DashboardModule } from "./dashboard/dashboard.module";
 import { SegmentsModule } from "./segments/segments.module";
 import { SegmentsController } from "./segments/segments.controller";
 import { SegmentsService } from "./segments/segments.service";
@@ -67,17 +66,17 @@ const queueModules = queueEnabled ? [
     ContactsModule,
     ProductsModule,
     PipelinesModule,
+    DashboardModule,
     SegmentsModule,
     AuditLogsModule,
     ...queueModules,
     ...crmCrudModules
   ],
-  controllers: [HealthController, SegmentsController, DashboardController],
+  controllers: [HealthController, SegmentsController],
   providers: [
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
-    DashboardService,
     SegmentsService
   ]
 })
