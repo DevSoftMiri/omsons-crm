@@ -1,3 +1,4 @@
+/* eslint-disable no-irregular-whitespace */
 "use client";
 
 import { AppShell } from "@/components/layout/app-shell";
