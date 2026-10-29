@@ -854,7 +854,7 @@ function ActivityWorkspace({ meetings }: { meetings: Meeting[] }) {
 
         <h3 className="mt-5 text-lg font-medium text-[#343a40]">Meetings</h3>
         <div className="mt-4 space-y-4">
-          {meetings.length ? meetings.map((meeting) => <TimelineCard key={meeting.id} title={meeting.name} date={new Date(meeting.activityAt).toLocaleString()} body={[meeting.type, meeting.outcome, meeting.location].filter(Boolean).join(" · ") || "Company meeting"} />) : <p className="rounded-lg border border-dashed border-[#cbd6e2] p-5 text-sm text-[#516f90]">No meetings linked to this company yet.</p>}
+          {meetings.length ? meetings.map((meeting) => <TimelineCard key={meeting.id} title={meeting.name} date={new Date(meeting.activityAt).toLocaleString()} body={[meeting.type, meeting.location].filter(Boolean).join(" · ") || "Company meeting"} outcome={meeting.outcome} />) : <p className="rounded-lg border border-dashed border-[#cbd6e2] p-5 text-sm text-[#516f90]">No meetings linked to this company yet.</p>}
         </div>
 
         <h3 className="mt-6 text-lg font-medium text-[#343a40]">October 2026</h3>
@@ -884,7 +884,9 @@ function FilterButton({ label }: { label: string }) {
   );
 }
 
-function TimelineCard({ title, date, body }: { title: string; date: string; body: string }) {
+const meetingOutcomeClass: Record<string, string> = { Scheduled: "border-blue-200 bg-blue-50 text-blue-700", Completed: "border-green-200 bg-green-50 text-green-700", Rescheduled: "border-amber-200 bg-amber-50 text-amber-700", Cancelled: "border-red-200 bg-red-50 text-red-700", "No show": "border-purple-200 bg-purple-50 text-purple-700" };
+
+function TimelineCard({ title, date, body, outcome }: { title: string; date: string; body: string; outcome?: string | null }) {
   return (
     <article className="rounded-2xl border border-[#d0d7de] bg-white p-4 shadow-[0_8px_20px_rgba(33,51,67,0.08)]">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -895,6 +897,7 @@ function TimelineCard({ title, date, body }: { title: string; date: string; body
         <time className="shrink-0 text-xs text-[#516f90]">{date}</time>
       </div>
       <p className="mt-3 pl-7 text-sm leading-6 text-[#343a40]">{body}</p>
+      {outcome ? <span className={`ml-7 mt-2 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${meetingOutcomeClass[outcome] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>{outcome}</span> : null}
     </article>
   );
 }

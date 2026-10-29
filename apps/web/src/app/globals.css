@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
 /* Meeting company picker hierarchy spacing */
 form.max-w-\[720px\] > div.grid > label:nth-of-type(2) > div.absolute {
   padding: 0.5rem;
