@@ -1,9 +1,10 @@
 "use client";
 import { AppShell } from "@/components/layout/app-shell";
-import { GripVertical, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
+import { industryOptions } from "./company-industries";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 const input =
@@ -22,6 +23,7 @@ type FormState = {
   timeZone: string;
   description: string;
   linkedinCompanyPage: string;
+  lifecycleStage: string;
 };
 
 export function CompanyForm({
@@ -29,11 +31,13 @@ export function CompanyForm({
   modal = false,
   onClose,
   onSaved,
+  lifecycleStage = "Subscriber",
 }: {
   parentCompanyId?: string;
   modal?: boolean;
   onClose?: () => void;
   onSaved?: () => void;
+  lifecycleStage?: string;
 } = {}) {
   const fieldLabels: Record<keyof FormState, string> = {
     domainName: "Company domain name",
@@ -49,6 +53,7 @@ export function CompanyForm({
     timeZone: "Time zone",
     description: "Description",
     linkedinCompanyPage: "LinkedIn company page",
+    lifecycleStage: "Lifecycle stage",
   };
   const [form, setForm] = useState<FormState>({
     domainName: "",
@@ -64,6 +69,7 @@ export function CompanyForm({
     timeZone: "",
     description: "",
     linkedinCompanyPage: "",
+    lifecycleStage,
   });
   const [parentId, setParentId] = useState(parentCompanyId || "");
   const [error, setError] = useState("");
@@ -81,6 +87,20 @@ export function CompanyForm({
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [customFieldOrder, setCustomFieldOrder] = useState<string[]>([]);
   const [customFieldName, setCustomFieldName] = useState("");
+  const [industryOpen, setIndustryOpen] = useState(false);
+  const [industrySearch, setIndustrySearch] = useState("");
+  const industryPickerRef = useRef<HTMLLabelElement>(null);
+  useEffect(() => {
+    if (!industryOpen) return;
+    const closeIndustryPicker = (event: MouseEvent) => {
+      if (!industryPickerRef.current?.contains(event.target as Node)) {
+        setIndustryOpen(false);
+        setIndustrySearch("");
+      }
+    };
+    document.addEventListener("mousedown", closeIndustryPicker);
+    return () => document.removeEventListener("mousedown", closeIndustryPicker);
+  }, [industryOpen]);
   useEffect(() => {
     if (!parentCompanyId)
       setParentId(
@@ -99,9 +119,17 @@ export function CompanyForm({
         method: "POST",
         headers: createHeaders(createIdempotencyKey()),
         body: JSON.stringify({
-          ...form,
+          domainName: form.domainName || undefined,
+          name: form.name,
+          industry: form.industry || undefined,
+          city: form.city || undefined,
+          state: form.state || undefined,
+          postalCode: form.postalCode || undefined,
+          timeZone: form.timeZone || undefined,
+          description: form.description || undefined,
+          linkedinCompanyPage: form.linkedinCompanyPage || undefined,
           customerType: form.type || undefined,
-          ownerId: form.ownerId || undefined,
+          ownerName: form.ownerId || undefined,
           numberOfEmployees: form.numberOfEmployees
             ? Number(form.numberOfEmployees)
             : undefined,
@@ -110,9 +138,14 @@ export function CompanyForm({
             : undefined,
           parentCompanyId: parentId || undefined,
           customFields,
+          lifecycleStage: form.lifecycleStage,
         }),
       });
-      if (!response.ok) throw new Error("Unable to create company");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { message?: string | string[] } | null;
+        const message = Array.isArray(payload?.message) ? payload.message.join(", ") : payload?.message;
+        throw new Error(message || "Unable to create company");
+      }
       const company = (await response.json()) as { id: string };
       if (modal) onSaved?.();
       else window.location.assign(`/companies/${company.id}`);
@@ -130,7 +163,7 @@ export function CompanyForm({
     type = "text",
     required = false,
   ) => (
-    <label className="grid gap-1 text-sm font-semibold text-[#213343]">
+    <label className="grid gap-1 text-sm font-semibold text-[#213343]" key={key}>
       <span>{label}</span>
       <input
         className={input}
@@ -142,6 +175,19 @@ export function CompanyForm({
     </label>
   );
   const renderField = (key: keyof FormState) =>
+    key === "industry" ? (
+      <label className="relative grid gap-1 text-sm font-semibold text-[#213343]" key={key} ref={industryPickerRef}>
+        <span>{fieldLabels[key]}</span>
+        <button className={`${input} flex items-center justify-between bg-white text-left`} type="button" onClick={() => setIndustryOpen((open) => !open)}>
+          <span className={form.industry ? "text-[#213343]" : "text-[#8293a6]"}>{form.industry || "Select industry"}</span>
+          <ChevronDown className="h-4 w-4" />
+        </button>
+        {industryOpen ? <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 rounded-xl border border-[#cbd6e2] bg-white p-3 shadow-xl">
+          <div className="flex items-center rounded-full border-2 border-[#1473e6] px-3"><Search className="h-4 w-4 text-[#516f90]" /><input autoFocus className="min-w-0 flex-1 px-2 py-2 text-sm font-normal outline-none" placeholder="Search" value={industrySearch} onChange={(event) => setIndustrySearch(event.target.value)} /></div>
+          <div className="mt-2 max-h-64 overflow-y-auto">{industryOptions.filter((industry) => industry.toLowerCase().includes(industrySearch.trim().toLowerCase())).map((industry) => <button className="block w-full rounded px-2 py-2 text-left text-sm font-normal hover:bg-[#f1f5f9]" type="button" key={industry} onClick={() => { update("industry", industry); setIndustryOpen(false); setIndustrySearch(""); }}>{industry}</button>)}{!industryOptions.some((industry) => industry.toLowerCase().includes(industrySearch.trim().toLowerCase())) ? <p className="px-2 py-3 text-sm font-normal text-[#516f90]">No industries found.</p> : null}</div>
+        </div> : null}
+      </label>
+    ) :
     key === "description" ? (
       <label
         className="grid gap-1 text-sm font-semibold text-[#213343] sm:col-span-2 xl:col-span-3"

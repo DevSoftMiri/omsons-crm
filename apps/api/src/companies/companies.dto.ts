@@ -1,9 +1,9 @@
-import { IsArray, IsOptional, IsString, MinLength } from "class-validator";
+import { IsArray, IsObject, IsOptional, IsString, MinLength } from "class-validator";
 
 export class CompanyDto {
-  @IsString()
+  @IsOptional() @IsString()
   @MinLength(1)
-  name!: string;
+  name?: string;
 
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() domainName?: string;
@@ -16,10 +16,12 @@ export class CompanyDto {
   @IsOptional() @IsString() timeZone?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() linkedinCompanyPage?: string;
-  @IsOptional() customFields?: Record<string, unknown>;
+  @IsOptional() @IsObject() customFields?: Record<string, unknown>;
   @IsOptional() @IsString() country?: string;
   @IsOptional() @IsString() parentCompanyId?: string | null;
   @IsOptional() @IsString() ownerId?: string | null;
+  @IsOptional() @IsString() ownerName?: string;
+  @IsOptional() @IsString() lifecycleStage?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) regions?: string[];
   @IsOptional() @IsString() customerType?: string;
   @IsOptional() @IsString() companySize?: string;

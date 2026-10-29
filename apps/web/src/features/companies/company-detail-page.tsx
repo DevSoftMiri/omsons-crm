@@ -1,10 +1,12 @@
-﻿"use client";
+"use client";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { RecordDetailHeader } from "@/components/ui/crm-page-template";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
+import { industryOptions } from "./company-industries";
+import { MeetingModal, type Meeting } from "../meetings/meetings-page";
 import {
   Bot,
   BriefcaseBusiness,
@@ -33,8 +35,9 @@ import {
   ThumbsUp,
   Ticket,
   UserRound,
-  UsersRound
-  ,Trash2
+  UsersRound,
+  Trash2,
+  X
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -42,9 +45,17 @@ const leadStatuses = [
   ["New", "bg-[#e8f5e9] text-[#2e7d32]"], ["Contacted", "bg-[#e3f2fd] text-[#1565c0]"], ["Qualified", "bg-[#ede7f6] text-[#6a1b9a]"],
   ["Proposal", "bg-[#fff3e0] text-[#e65100]"], ["Won", "bg-[#dff7e8] text-[#087443]"], ["Lost", "bg-[#ffebee] text-[#c62828]"]
 ] as const;
-type CompanyContact = { id: string; firstName: string; lastName?: string | null; email?: string | null; phone?: string | null; title?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; owner?: { name: string } | null };
+type CompanyContact = { id: string; firstName: string; lastName?: string | null; email?: string | null; phone?: string | null; title?: string | null; department?: string | null; roleInPurchase?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; owner?: { name: string } | null };
+const repairContactText = (value?: string | null) => {
+  if (!value || !/[ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡]/.test(value)) return value;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(value, (character) => character.charCodeAt(0)));
+  } catch {
+    return value;
+  }
+};
 type CompanyDeal = { id: string; name: string; amount?: number | string | null; stage: string; closeDate?: string | null; contactId?: string | null };
-type CompanyRecord = { id: string; name: string; website?: string | null; regions: string[]; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
+type CompanyRecord = { id: string; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
 
 const _info = [
   ["Company owner", "No owner", UserRound],
@@ -66,25 +77,30 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
   const [headerCompact, setHeaderCompact] = useState(false);
   const [company, setCompany] = useState<CompanyRecord | null>(null);
   const [companies, setCompanies] = useState<CompanyRecord[]>([]);
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [newRegion, setNewRegion] = useState("");
   const [selectedSubCompany, setSelectedSubCompany] = useState("");
   const [error, setError] = useState("");
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [companyMeetings, setCompanyMeetings] = useState<Meeting[]>([]);
   const loadCompany = async () => {
-    const response = await fetch(`${API_URL}/companies`);
+    const response = await fetch(`${API_URL}/companies`, { cache: "no-store" });
     const result = await response.json() as { data: CompanyRecord[] };
     const records = result.data ?? [];
     setCompanies(records);
-    let detail = await fetch(`${API_URL}/companies/${companyId}`);
+    let detail = await fetch(`${API_URL}/companies/${companyId}`, { cache: "no-store" });
     if (!detail.ok) {
       const normalized = companyId.toLowerCase().replace(/-/g, " ");
       const match = records.find((record) => record.id === companyId || record.name.toLowerCase() === normalized || record.name.toLowerCase().replace(/\s+/g, "-") === companyId.toLowerCase());
       if (!match) throw new Error("Company not found");
-      detail = await fetch(`${API_URL}/companies/${match.id}`);
+      detail = await fetch(`${API_URL}/companies/${match.id}`, { cache: "no-store" });
     }
     const loaded = await detail.json() as Partial<CompanyRecord>;
     setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: Array.isArray(loaded.deals) ? loaded.deals : [], regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: loaded.id ?? companyId, name: loaded.name ?? "Company", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
+    const meetingsResponse = await fetch(`${API_URL}/meetings?companyId=${encodeURIComponent((loaded.id ?? companyId) as string)}&limit=100`, { cache: "no-store" });
+    if (meetingsResponse.ok) setCompanyMeetings(((await meetingsResponse.json()) as { data?: Meeting[] }).data ?? []);
   };
-  useEffect(() => { void loadCompany().catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
+  useEffect(() => { void Promise.all([loadCompany(), fetch(`${API_URL}/users?limit=100`, { cache: "no-store" }).then((response) => response.json()).then((payload: { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>) => setUsers(Array.isArray(payload) ? payload : payload.data ?? []))]).catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
   useEffect(() => {
     const onScroll = () => setHeaderCompact(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -104,7 +120,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
           <span className="font-semibold text-[#213343]">{company?.name ?? "Loading company..."}</span>
         </div>
 
-        <CompanyHeader compact={headerCompact} company={company} />
+        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => setMeetingModalOpen(true)} />
         <section className="mt-4 space-y-3">
 
             <div className="grid grid-cols-4 border-b border-[#dbe4ed] bg-transparent text-sm">
@@ -136,7 +152,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
             ) : null}
             {activeTab === "Activities" ? (
               <div className={`relative grid gap-4 pt-2 ${rightRailCollapsed ? "xl:grid-cols-[minmax(0,1fr)_0px]" : "xl:grid-cols-[minmax(0,1fr)_380px]"}`}>
-                <ActivityWorkspace />
+                <ActivityWorkspace meetings={companyMeetings} />
                 <button className="absolute right-[368px] top-8 z-10 hidden h-9 w-9 place-items-center rounded-full border border-[#9fb3c8] bg-white shadow-sm xl:grid" onClick={() => setRightRailCollapsed((collapsed) => !collapsed)} type="button" aria-label="Toggle related records">
                   <ChevronRight className={`h-4 w-4 transition ${rightRailCollapsed ? "rotate-180" : ""}`} />
                 </button>
@@ -161,6 +177,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
             ) : null}
         </section>
       </div>
+      {meetingModalOpen && company ? <MeetingModal meeting={null} users={users} contacts={company.contacts.map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName, email: contact.email }))} deals={company.deals.map((deal) => ({ id: deal.id, name: deal.name }))} companies={companies.map((item) => ({ id: item.id, name: item.name, parentCompanyId: item.parentCompanyId }))} initialCompanyId={company.id} initialCompanyName={company.name} onClose={() => setMeetingModalOpen(false)} onSaved={async () => { setMeetingModalOpen(false); await loadCompany(); }} /> : null}
     </AppShell>
   );
 }
@@ -200,15 +217,15 @@ function CompanyContactModal({ companyId, currentContacts, onClose, onSaved }: {
   const [tab, setTab] = useState<"new" | "existing">("new");
   const [contacts, setContacts] = useState<CompanyContact[]>([]); const [search, setSearch] = useState("");
   const [statusOpen, setStatusOpen] = useState(false);
-  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", owner: "Soft Dev", title: "", phone: "", lifecycleStage: "", leadStatus: "" });
+  const [form, setForm] = useState({ email: "", firstName: "", lastName: "", owner: "Soft Dev", title: "", department: "", roleInPurchase: "", phone: "", lifecycleStage: "", leadStatus: "" });
   const creating = useRef(false);
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
   useEffect(() => { if (tab === "existing") void fetch(`${API_URL}/companies/${companyId}/contacts`).then((response) => response.json()).then((payload: unknown) => { const value = payload as { data?: CompanyContact[]; value?: CompanyContact[] }; setContacts(Array.isArray(payload) ? payload : Array.isArray(value.data) ? value.data : Array.isArray(value.value) ? value.value : []); }); }, [companyId, tab]);
-  const create = async (event: React.FormEvent) => { event.preventDefault(); if (creating.current) return; creating.current = true; try { await fetch(`${API_URL}/companies/${companyId}/contacts`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ firstName: form.firstName, lastName: form.lastName, email: form.email, phone: form.phone, title: form.title, lifecycleStage: form.lifecycleStage, leadStatus: form.leadStatus }) }); await onSaved(); } finally { creating.current = false; } };
+  const create = async (event: React.FormEvent) => { event.preventDefault(); if (creating.current) return; creating.current = true; try { await fetch(`${API_URL}/companies/${companyId}/contacts`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ firstName: form.firstName, lastName: form.lastName, email: form.email, phone: form.phone, title: form.title, department: form.department, roleInPurchase: form.roleInPurchase, lifecycleStage: form.lifecycleStage, leadStatus: form.leadStatus, owner: form.owner }) }); await onSaved(); } finally { creating.current = false; } };
   const [linkingIds, setLinkingIds] = useState<Set<string>>(new Set());
   const addExisting = async (id: string) => { if (linkingIds.has(id)) return; setLinkingIds((current) => new Set(current).add(id)); try { const response = await fetch(`${API_URL}/companies/${companyId}/contacts/${id}`, { method: "POST" }); if (response.ok) await onSaved(); } finally { setLinkingIds((current) => { const next = new Set(current); next.delete(id); return next; }); } };
   const available = (Array.isArray(contacts) ? contacts : []).filter((contact) => !(currentContacts ?? []).some((current) => current.id === contact.id) && `${contact.firstName} ${contact.lastName ?? ""} ${contact.email ?? ""}`.toLowerCase().includes(search.toLowerCase()));
-  return <div className="fixed inset-0 z-[90] grid place-items-center bg-[#111827]/45 p-4"><div className="max-h-[90vh] w-full max-w-[680px] overflow-auto rounded-xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4"><h2 className="text-xl font-bold">{tab === "new" ? "Create new Contact" : "Add existing Contact"}</h2><button type="button" onClick={onClose} aria-label="Close">Ã—</button></div><div className="grid grid-cols-2 border-b border-[#dbe4ed] text-center font-semibold"><button className={`border-b-4 px-4 py-3 ${tab === "new" ? "border-[#333]" : "border-transparent"}`} type="button" onClick={() => setTab("new")}>Create new</button><button className={`border-b-4 px-4 py-3 ${tab === "existing" ? "border-[#333]" : "border-transparent"}`} type="button" onClick={() => setTab("existing")}>Add existing</button></div>{tab === "new" ? <form className="grid gap-4 p-6 sm:grid-cols-2" onSubmit={create}>{(["email", "firstName", "lastName", "owner", "title", "phone"] as const).map((field) => <label className="grid gap-1 text-sm font-semibold" key={field}>{field === "owner" ? "Contact owner" : field === "title" ? "Job title" : field === "firstName" ? "First name" : field === "lastName" ? "Last name" : field === "phone" ? "Phone number" : "Email"}<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" required={field === "email" || field === "firstName"} type={field === "email" ? "email" : "text"} value={form[field]} onChange={(event) => update(field, event.target.value)} /></label>)}<label className="grid gap-1 text-sm font-semibold">Lifecycle stage<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.lifecycleStage} onChange={(event) => update("lifecycleStage", event.target.value)}><option value="">Select stage</option><option>Subscriber</option><option>Lead</option><option>Customer</option></select></label><label className="relative grid gap-1 text-sm font-semibold">Lead status<button className="flex w-full items-center justify-between rounded-md border border-[#cbd6e2] px-4 py-3 text-left font-normal" type="button" onClick={() => setStatusOpen((open) => !open)}><span className={leadStatuses.find(([status]) => status === form.leadStatus)?.[1] ?? "text-[#516f90]"}>{form.leadStatus || "Select status"}</span><span>âŒ„</span></button>{statusOpen ? <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto overscroll-contain rounded-md border border-[#cbd6e2] bg-white p-1 shadow-lg">{leadStatuses.map(([status, color]) => <button className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]" type="button" key={status} onClick={() => { update("leadStatus", status); setStatusOpen(false); }}><span className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${color}`}>{status}</span></button>)}</div> : null}</label><div className="flex justify-end gap-2 sm:col-span-2"><button className="rounded-md border px-4 py-2" type="button" onClick={onClose}>Cancel</button><button className="rounded-md bg-[#006b70] px-4 py-2 font-semibold text-white" type="submit">Create</button></div></form> : <div className="p-6"><input className="mb-4 w-full rounded-full border-2 border-[#1473e6] px-4 py-3" placeholder="Search Contacts" value={search} onChange={(event) => setSearch(event.target.value)} />{available.length ? available.map((contact) => <label className="flex items-center gap-3 border-b py-3" key={contact.id}><input type="checkbox" disabled={linkingIds.has(contact.id)} onChange={() => void addExisting(contact.id)} /><span>{contact.firstName} {contact.lastName ?? ""} ({contact.email || "No email"})</span></label>) : <p className="py-6 text-center text-sm text-[#516f90]">No existing contacts available.</p>}</div>}</div></div>;
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-[#111827]/45 p-4"><div className="max-h-[90vh] w-full max-w-[680px] overflow-auto rounded-xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4"><h2 className="text-xl font-bold">{tab === "new" ? "Create new Contact" : "Add existing Contact"}</h2><button className="grid h-9 w-9 place-items-center rounded-md text-[#516f90] transition hover:bg-[#f1f5f9] hover:text-[#213343]" type="button" onClick={onClose} aria-label="Close"><X className="h-5 w-5" aria-hidden="true" /></button></div><div className="grid grid-cols-2 border-b border-[#dbe4ed] text-center font-semibold"><button className={`border-b-4 px-4 py-3 ${tab === "new" ? "border-[#333]" : "border-transparent"}`} type="button" onClick={() => setTab("new")}>Create new</button><button className={`border-b-4 px-4 py-3 ${tab === "existing" ? "border-[#333]" : "border-transparent"}`} type="button" onClick={() => setTab("existing")}>Add existing</button></div>{tab === "new" ? <form className="grid gap-4 p-6 sm:grid-cols-2" onSubmit={create}>{(["email", "firstName", "lastName", "owner", "title", "department", "roleInPurchase", "phone"] as const).map((field) => <label className="grid gap-1 text-sm font-semibold" key={field}>{field === "owner" ? "Contact owner" : field === "title" ? "Job title" : field === "firstName" ? "First name" : field === "lastName" ? "Last name" : field === "phone" ? "Phone number" : field === "department" ? "Department" : field === "roleInPurchase" ? "Role in purchase" : "Email"}<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" required={field === "email" || field === "firstName"} type={field === "email" ? "email" : "text"} value={form[field]} onChange={(event) => update(field, event.target.value)} /></label>)}<label className="grid gap-1 text-sm font-semibold">Lifecycle stage<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.lifecycleStage} onChange={(event) => update("lifecycleStage", event.target.value)}><option value="">Select stage</option><option>Subscriber</option><option>Lead</option><option>Customer</option></select></label><label className="relative grid gap-1 text-sm font-semibold">Lead status<button className="flex w-full items-center justify-between rounded-md border border-[#cbd6e2] px-4 py-3 text-left font-normal" type="button" onClick={() => setStatusOpen((open) => !open)}><span className={leadStatuses.find(([status]) => status === form.leadStatus)?.[1] ?? "text-[#516f90]"}>{form.leadStatus || "Select status"}</span><ChevronDown className="h-4 w-4 text-[#516f90]" aria-hidden="true" /></button>{statusOpen ? <div className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-48 overflow-y-auto overscroll-contain rounded-md border border-[#cbd6e2] bg-white p-1 shadow-lg">{leadStatuses.map(([status, color]) => <button className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]" type="button" key={status} onClick={() => { update("leadStatus", status); setStatusOpen(false); }}><span className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${color}`}>{status}</span></button>)}</div> : null}</label><div className="flex justify-end gap-2 sm:col-span-2"><button className="rounded-md border px-4 py-2" type="button" onClick={onClose}>Cancel</button><button className="rounded-md bg-[#006b70] px-4 py-2 font-semibold text-white" type="submit">Create</button></div></form> : <div className="p-6"><input className="mb-4 w-full rounded-full border-2 border-[#1473e6] px-4 py-3" placeholder="Search Contacts" value={search} onChange={(event) => setSearch(event.target.value)} />{available.length ? available.map((contact) => <label className="flex items-center gap-3 border-b py-3" key={contact.id}><input type="checkbox" disabled={linkingIds.has(contact.id)} onChange={() => void addExisting(contact.id)} /><span>{contact.firstName} {contact.lastName ?? ""} ({contact.email || "No email"})</span></label>) : <p className="py-6 text-center text-sm text-[#516f90]">No existing contacts available.</p>}</div>}</div></div>;
 }
 
 function CreateDealModal({ company, onClose, onSaved }: { company: CompanyRecord; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -216,7 +233,7 @@ function CreateDealModal({ company, onClose, onSaved }: { company: CompanyRecord
   const creating = useRef(false);
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
   const submit = async (event: React.FormEvent) => { event.preventDefault(); if (creating.current) return; creating.current = true; try { const response = await fetch(`${API_URL}/deals`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ ...form, amount: form.amount || null, contactId: form.contactId || null, companyId: company.id }) }); if (response.ok) await onSaved(); } finally { creating.current = false; } };
-  return <div className="fixed inset-0 z-[90] grid place-items-center bg-[#111827]/45 p-4"><form className="max-h-[90vh] w-full max-w-[620px] overflow-y-auto rounded-xl bg-white shadow-2xl" onSubmit={submit}><div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4"><h2 className="text-xl font-bold">Create deal</h2><button type="button" onClick={onClose}>Ã—</button></div><div className="grid gap-4 p-6 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold sm:col-span-2">Deal name<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" required value={form.name} onChange={(event) => update("name", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Amount<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" type="number" min="0" value={form.amount} onChange={(event) => update("amount", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Close date<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" type="date" value={form.closeDate} onChange={(event) => update("closeDate", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Deal stage<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.stage} onChange={(event) => update("stage", event.target.value)}><option>Appointment Scheduled</option><option>Presentation Scheduled</option><option>Decision Maker Bought-In</option><option>Contract Sent</option><option>Closed Won</option><option>Closed Lost</option></select></label><label className="grid gap-1 text-sm font-semibold">Priority<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.priority} onChange={(event) => update("priority", event.target.value)}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label><label className="grid gap-1 text-sm font-semibold sm:col-span-2">Contact<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.contactId} onChange={(event) => update("contactId", event.target.value)}><option value="">No contact</option>{company.contacts.map((contact) => <option value={contact.id} key={contact.id}>{contact.firstName} {contact.lastName ?? ""}</option>)}</select></label></div><div className="flex justify-end gap-2 border-t border-[#dbe4ed] px-6 py-4"><button className="rounded-md border px-4 py-2" type="button" onClick={onClose}>Cancel</button><button className="rounded-md bg-[#ff5c35] px-5 py-2 font-semibold text-white" type="submit">Create deal</button></div></form></div>;
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-[#111827]/45 p-4"><form className="max-h-[90vh] w-full max-w-[620px] overflow-y-auto rounded-xl bg-white shadow-2xl" onSubmit={submit}><div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4"><h2 className="text-xl font-bold">Create deal</h2><button className="grid h-9 w-9 place-items-center rounded-md text-[#516f90] transition hover:bg-[#f1f5f9] hover:text-[#213343]" type="button" onClick={onClose} aria-label="Close"><X className="h-5 w-5" aria-hidden="true" /></button></div><div className="grid gap-4 p-6 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold sm:col-span-2">Deal name<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" required value={form.name} onChange={(event) => update("name", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Amount<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" type="number" min="0" value={form.amount} onChange={(event) => update("amount", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Close date<input className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" type="date" value={form.closeDate} onChange={(event) => update("closeDate", event.target.value)} /></label><label className="grid gap-1 text-sm font-semibold">Deal stage<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.stage} onChange={(event) => update("stage", event.target.value)}><option>Appointment Scheduled</option><option>Presentation Scheduled</option><option>Decision Maker Bought-In</option><option>Contract Sent</option><option>Closed Won</option><option>Closed Lost</option></select></label><label className="grid gap-1 text-sm font-semibold">Priority<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.priority} onChange={(event) => update("priority", event.target.value)}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label><label className="grid gap-1 text-sm font-semibold sm:col-span-2">Contact<select className="rounded-md border border-[#cbd6e2] px-3 py-2 font-normal" value={form.contactId} onChange={(event) => update("contactId", event.target.value)}><option value="">No contact</option>{company.contacts.map((contact) => <option value={contact.id} key={contact.id}>{contact.firstName} {contact.lastName ?? ""}</option>)}</select></label></div><div className="flex justify-end gap-2 border-t border-[#dbe4ed] px-6 py-4"><button className="rounded-md border px-4 py-2" type="button" onClick={onClose}>Cancel</button><button className="rounded-md bg-[#ff5c35] px-5 py-2 font-semibold text-white" type="submit">Create deal</button></div></form></div>;
 }
 
 function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }: { company: CompanyRecord | null; onRefresh: () => Promise<void>; collapsedSections: Record<string, boolean>; toggleSection: (title: string) => void }) {
@@ -249,10 +266,10 @@ function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }:
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-bold">{contact.firstName} {contact.lastName ?? ""}</p>
-                            <p className="text-xs text-[#516f90]">{contact.title || "No job title"}</p>
+                            <p className="text-xs text-[#516f90]">{contact.title || "No job title"}</p><div className="mt-2 flex flex-wrap gap-1.5 text-[11px]"><span className="rounded-full bg-[#eef2ff] px-2 py-1 font-semibold text-[#40558d]">Department: {repairContactText(contact.department) || "Not set"}</span><span className="rounded-full bg-[#f3f0ff] px-2 py-1 font-semibold text-[#68459a]">Role in purchase: {repairContactText(contact.roleInPurchase) || "Not set"}</span></div>
                             <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-[#eef6f6] px-2 py-0.5 text-[11px] font-semibold text-[#006b70]">{contact.lifecycleStage || "No lifecycle stage"}</span><span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-semibold text-[#9b4a24]">{contact.leadStatus || "No lead status"}</span><span className="rounded-full bg-[#f2f5f8] px-2 py-0.5 text-[11px] font-semibold text-[#516f90]">{contact.owner?.name || "No owner"}</span></div>
                           </div>
-                          <div className="flex items-center gap-1"><span className="cursor-grab rounded p-1 text-[#516f90]" title="Drag to reorder"><GripVertical className="h-4 w-4" /></span><Ellipsis className="h-4 w-4 text-[#516f90]" /></div>
+                          <div className="flex items-center gap-1"><span className="cursor-grab rounded p-1 text-[#516f90]" title="Drag to reorder"><GripVertical className="h-4 w-4" /></span><details className="relative"><summary className="cursor-pointer list-none rounded p-1 text-[#516f90] hover:bg-[#f1f5f9]"><Ellipsis className="h-4 w-4" /></summary><div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[#dbe4ed] bg-white p-1 text-xs shadow-lg"><button className="block w-full rounded px-3 py-2 text-left hover:bg-[#f7f9fb]" type="button" onClick={async () => { await fetch(`${API_URL}/companies/${company?.id}/contacts/${contact.id}`, { method: "DELETE" }); await onRefresh(); }}>Unlink contact</button><button className="block w-full rounded px-3 py-2 text-left text-red-700 hover:bg-[#fff1eb]" type="button" onClick={async () => { if (window.confirm("Delete this contact permanently?")) { await fetch(`${API_URL}/contacts/${contact.id}`, { method: "DELETE" }); await onRefresh(); } }}>Delete contact</button></div></details></div>
                         </div>
                         <p className="mt-3 flex items-center gap-2 text-xs text-[#213343]">
                           <Mail className="h-3.5 w-3.5 text-[#516f90]" />
@@ -284,7 +301,7 @@ function RelatedPanels({ company, onRefresh, collapsedSections, toggleSection }:
               collapsed={collapsedSections["Deals (0)"]}
               onToggle={() => toggleSection("Deals (0)")}
             >
-              {company?.deals?.length ? <div className="space-y-2">{company.deals.map((deal) => <div className="rounded-lg border border-[#dbe4ed] p-3" key={deal.id}><p className="font-bold text-[#007a8a]">{deal.name}</p><p className="mt-1 text-sm text-[#516f90]">{deal.stage} {deal.amount ? `â€¢ â‚¹${deal.amount}` : ""}</p></div>)}</div> : <div className="rounded-lg bg-[#f7f9fb] p-6 text-center">
+              {company?.deals?.length ? <div className="space-y-2">{company.deals.map((deal) => <div className="rounded-lg border border-[#dbe4ed] p-3" key={deal.id}><p className="font-bold text-[#007a8a]">{deal.name}</p><p className="mt-1 text-sm text-[#516f90]">{deal.stage} {deal.amount ? `ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹${deal.amount}` : ""}</p></div>)}</div> : <div className="rounded-lg bg-[#f7f9fb] p-6 text-center">
                 <BriefcaseBusiness className="mx-auto h-9 w-9 text-[#7c98b6]" />
                 <p className="mt-3 text-sm font-bold">No deals yet</p>
                 <p className="mt-1 text-xs text-[#516f90]">Create a deal to track this company&apos;s opportunities.</p>
@@ -389,9 +406,16 @@ function PlaceholderTab({ title }: { title: string }) {
   );
 }
 
-function CompanyHeader({ compact, company }: { compact: boolean; company: CompanyRecord | null }) {
+function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void }) {
   const companyName = company?.name ?? "Loading company...";
   const website = company?.website?.replace(/^https?:\/\//, "") ?? "No website";
+  const isSubCompany = Boolean(company?.parentCompany);
+  const hierarchyOptions = company?.parentCompany
+    ? companies.filter((item) => item.parentCompanyId === company.parentCompany?.id).sort((left, right) => left.name.localeCompare(right.name))
+    : (company?.subCompanies ?? []).slice().sort((left, right) => left.name.localeCompare(right.name));
+  const switchCompany = (id: string) => {
+    if (id && id !== company?.id) window.location.assign(`/companies/${id}`);
+  };
   return (
     <>
       <RecordDetailHeader compact={compact}>
@@ -405,18 +429,40 @@ function CompanyHeader({ compact, company }: { compact: boolean; company: Compan
             <ChevronDown className="h-4 w-4" />
           </button>
         </div>
-        <div className={`relative px-4 py-3 ${compact ? "min-h-[76px]" : "min-h-[82px]"}`}>
-          <div className="absolute right-4 top-3 flex items-start gap-4">
+        <div className={`relative flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between ${compact ? "min-h-[76px]" : "min-h-[106px]"}`}>
+          <div className="flex shrink-0 items-start gap-3 lg:order-3 lg:ml-auto">
             <button className="hidden items-center gap-2 rounded-md border border-[#cbd6e2] px-4 py-2 text-sm font-bold lg:inline-flex">Actions <ChevronDown className="h-4 w-4" /></button>
             <div className="grid grid-cols-6 gap-2 text-center text-[11px]">
-              {[["Note", MessageSquarePlus], ["Email", Mail], ["Call", Phone], ["Task", Target], ["Meeting", CalendarDays], ["More", Ellipsis]].map(([label, Icon]) => <span className="min-w-0" key={label as string}><span className="mx-auto grid h-9 w-9 place-items-center rounded-full border border-[#9fb3c8]"><Icon className="h-4 w-4" /></span><span className="mt-1 block truncate">{label as string}</span></span>)}
+              {[["Note", MessageSquarePlus], ["Email", Mail], ["Call", Phone], ["Task", Target], ["Meeting", CalendarDays], ["More", Ellipsis]].map(([label, Icon]) => <button className="min-w-0 text-center" key={label as string} type="button" onClick={label === "Meeting" ? onOpenMeeting : undefined}><span className="mx-auto grid h-9 w-9 place-items-center rounded-full border border-[#9fb3c8]"><Icon className="h-4 w-4" /></span><span className="mt-1 block truncate">{label as string}</span></button>)}
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3 lg:order-1">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-[#fff0e9] text-2xl font-black text-[#ff5c35]">{companyName[0]?.toUpperCase() ?? "C"}</span>
-            <h1 className="text-2xl font-bold text-[#111827]">{companyName}</h1>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-[#111827]">{companyName}</h1>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isSubCompany ? "bg-[#f2f5f8] text-[#516f90]" : "bg-[#eef6ff] text-[#2563b8]"}`}>
+                  {isSubCompany ? "Sub-company" : "Main company"}
+                </span>
+              </div>
+              {company?.parentCompany ? (
+                <Link className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#516f90]" href={`/companies/${company.parentCompany.id}`}>
+                  <span>Main company:</span>
+                  <span className="rounded-full bg-[#f7f9fb] px-2.5 py-1 text-[#007a8a] hover:bg-[#eef6f6]">{company.parentCompany.name}</span>
+                </Link>
+              ) : null}
+              {hierarchyOptions.length ? (
+                <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-[#516f90]">
+                  <span>{isSubCompany ? "Sub-companies" : "Switch to sub-company"}</span>
+                  <select className="max-w-[220px] rounded-md border border-[#cbd6e2] bg-white px-2 py-1 text-xs font-semibold text-[#213343]" value={company?.id ?? ""} onChange={(event) => switchCompany(event.target.value)} aria-label="Switch company">
+                    {company ? <option value={company.id}>{isSubCompany ? company.name : "This company"}</option> : null}
+                    {hierarchyOptions.filter((item) => item.id !== company?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  </select>
+                </label>
+              ) : null}
+            </div>
           </div>
-          <div className={`mt-2 flex items-center gap-2 text-sm font-bold text-[#007a8a] ${compact ? "hidden" : ""}`}>
+          <div className={`mt-1 flex items-center gap-2 text-sm font-bold text-[#007a8a] lg:order-2 ${compact ? "hidden" : ""}`}>
             <span>{website}</span>
             <ExternalLink className="h-3.5 w-3.5" />
             <Copy className="h-3.5 w-3.5 text-[#516f90]" />
@@ -439,7 +485,7 @@ function CompanyHeader({ compact, company }: { compact: boolean; company: Compan
             ))}
           </div>
         </div>
-      {compact ? null : <CompanyInformationPanel />}
+      {compact ? null : <CompanyInformationPanel company={company} users={users} onRefresh={onRefresh} />}
       </RecordDetailHeader>
     </>
   );
@@ -543,45 +589,124 @@ function OverviewWorkspace() {
   );
 }
 
-function CompanyInformationPanel() {
-  const fields = [
-    { label: "Company owner", value: "No owner", placeholder: "", type: "input", icon: UserRound },
-    { label: "City", value: "", placeholder: "--", type: "input", icon: MapPin },
-    { label: "Industry", value: "", placeholder: "--", type: "input", icon: Building2 },
-    { label: "Lifecycle Stage", value: "Lead", placeholder: "", type: "select", icon: Target },
-    { label: "Lead Status", value: "", placeholder: "--", type: "select", icon: Target }
-  ] as const;
+function CompanyInformationPanel({ company, users, onRefresh }: { company: CompanyRecord | null; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void> }) {
+  type EditableField = "ownerName" | "industry" | "name" | "city" | "state" | "postalCode" | "numberOfEmployees" | "annualRevenue" | "timeZone" | "description" | "linkedinCompanyPage" | "lifecycleStage";
+  type Drafts = Record<EditableField, string>;
+  const emptyDrafts: Drafts = { ownerName: "", industry: "", name: "", city: "", state: "", postalCode: "", numberOfEmployees: "", annualRevenue: "", timeZone: "", description: "", linkedinCompanyPage: "", lifecycleStage: "Subscriber" };
+  const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
+  const [savingFields, setSavingFields] = useState<Set<EditableField>>(new Set());
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<EditableField, string>>>({});
+  const [savedFields, setSavedFields] = useState<Set<EditableField>>(new Set());
+  const [pendingValues, setPendingValues] = useState<Partial<Drafts>>({});
+  const [industryOpen, setIndustryOpen] = useState(false);
+  const [industrySearch, setIndustrySearch] = useState("");
+  const [showMore, setShowMore] = useState(false);
 
+  const companyValue = (field: EditableField): string => {
+    if (!company) return "";
+    if (field === "ownerName") return company.ownerName ?? company.owner?.name ?? "";
+    return String(company[field] ?? "");
+  };
+  useEffect(() => {
+    if (!company) return;
+    setDrafts((current) => {
+      const next = { ...current };
+      (Object.keys(emptyDrafts) as EditableField[]).forEach((field) => {
+        const serverValue = companyValue(field);
+        const pendingValue = pendingValues[field];
+        if (pendingValue === undefined || pendingValue === serverValue) {
+          next[field] = serverValue;
+          if (pendingValue !== undefined && pendingValue === serverValue) {
+            setPendingValues((pending) => { const copy = { ...pending }; delete copy[field]; return copy; });
+          }
+        }
+      });
+      return next;
+    });
+  }, [company]);
+
+  const updateDraft = (field: EditableField, value: string) => {
+    setDrafts((current) => ({ ...current, [field]: value }));
+    setSavedFields((current) => { const next = new Set(current); next.delete(field); return next; });
+    setFieldErrors((current) => ({ ...current, [field]: "" }));
+  };
+  const updateField = async (field: EditableField, value: string) => {
+    if (!company) return;
+    const normalizedValue = value.replace(/\s+/g, " ").trim();
+    if (normalizedValue === companyValue(field).replace(/\s+/g, " ").trim()) return;
+    setSavingFields((current) => new Set(current).add(field));
+    setFieldErrors((current) => ({ ...current, [field]: "" }));
+    try {
+      const bodyValue = ["numberOfEmployees", "annualRevenue"].includes(field) ? (normalizedValue ? Number(normalizedValue) : null) : normalizedValue;
+      const response = await fetch(`${API_URL}/companies/${company.id}`, { method: "PATCH", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ [field]: bodyValue }) });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { message?: string | string[] } | null;
+        const message = Array.isArray(payload?.message) ? payload.message.join(", ") : payload?.message;
+        throw new Error(message || `Unable to update ${field}`);
+      }
+      const updated = await response.json() as Partial<CompanyRecord>;
+      const savedValue = field === "ownerName" ? updated.ownerName ?? "" : String(updated[field] ?? normalizedValue);
+      setDrafts((current) => ({ ...current, [field]: savedValue }));
+      setPendingValues((current) => ({ ...current, [field]: savedValue }));
+      setSavedFields((current) => new Set(current).add(field));
+      void onRefresh();
+    } catch (error) {
+      setFieldErrors((current) => ({ ...current, [field]: error instanceof Error ? error.message : `Unable to update ${field}` }));
+    } finally {
+      setSavingFields((current) => { const next = new Set(current); next.delete(field); return next; });
+    }
+  };
+  const saveOnBlur = (field: EditableField) => void updateField(field, drafts[field]);
+  const filteredIndustries = industryOptions.filter((industry) => industry.toLocaleLowerCase().includes(industrySearch.trim().toLocaleLowerCase()));
+  const lifecycleStages = ["Subscriber", "Lead", "Marketing Qualified Lead", "Sales Qualified Lead", "Opportunity", "Customer", "Evangelist", "Other"];
+  const baseTextFields = [
+    ["Company name", "name", company?.name, Building2]
+  ] as const;
+  const additionalTextFields = [
+    ["City", "city", company?.city, MapPin],
+    ["State/Region", "state", company?.state, MapPin], ["Postal code", "postalCode", company?.postalCode, MapPin],
+    ["Number of employees", "numberOfEmployees", company?.numberOfEmployees, UsersRound], ["Annual revenue", "annualRevenue", company?.annualRevenue, Target], ["Time zone", "timeZone", company?.timeZone, CalendarDays], ["LinkedIn company page", "linkedinCompanyPage", company?.linkedinCompanyPage, ExternalLink]
+  ] as const;
   return (
       <aside className="h-max border-t border-[#dbe4ed] bg-white px-4 py-2">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-bold text-[#213343]">Company information</h3>
         <Ellipsis className="h-4 w-4 text-[#516f90]" />
       </div>
-      <div className="grid gap-3 lg:grid-cols-5">
-        {fields.map(({ label, value, placeholder, type, icon: Icon }) => (
+      <div className="grid gap-3 lg:grid-cols-4">
+        <label className="grid grid-cols-[26px_1fr] gap-3"><Target className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">Lifecycle stage</span><select className="w-full rounded-md border border-[#cbd6e2] px-2 py-1.5 text-sm font-semibold text-[#213343]" value={drafts.lifecycleStage} disabled={savingFields.has("lifecycleStage")} onChange={(event) => updateDraft("lifecycleStage", event.target.value)} onBlur={() => saveOnBlur("lifecycleStage")}>{lifecycleStages.map((stage) => <option key={stage}>{stage}</option>)}</select>{savingFields.has("lifecycleStage") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("lifecycleStage") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.lifecycleStage ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.lifecycleStage} <button type="button" className="underline" onClick={() => saveOnBlur("lifecycleStage")}>Retry</button></span> : null}</span></label>
+        <div className="flex items-end gap-2">
+          <UserRound className="mb-2 h-5 w-5 text-[#516f90]" />
+          <label className="min-w-0 flex-1 text-xs text-[#516f90]">Owner name<input className="mt-1 w-full rounded-md border border-[#cbd6e2] px-2 py-1.5 text-sm font-semibold text-[#213343]" disabled={savingFields.has("ownerName")} value={drafts.ownerName} placeholder="No owner" onChange={(event) => updateDraft("ownerName", event.target.value)} onBlur={() => saveOnBlur("ownerName")} />{savingFields.has("ownerName") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("ownerName") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.ownerName ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.ownerName} <button type="button" className="underline" onClick={() => saveOnBlur("ownerName")}>Retry</button></span> : null}</label>
+        </div>
+        <div className="relative grid grid-cols-[26px_1fr] gap-3">
+          <Building2 className="mt-6 h-4 w-4 text-[#516f90]" />
+          <span><span className="mb-1 block text-xs text-[#516f90]">Industry</span><button type="button" className="flex w-full items-center justify-between rounded-md border border-[#cbd6e2] px-2 py-1 text-left text-sm font-semibold text-[#213343]" onClick={() => setIndustryOpen((open) => !open)}><span className="truncate">{drafts.industry || "Select industry"}</span><ChevronDown className="h-4 w-4 shrink-0" /></button>{industryOpen ? <div className="absolute left-7 right-0 top-[54px] z-30 rounded-xl border border-[#cbd6e2] bg-white p-3 shadow-xl"><div className="flex items-center rounded-full border-2 border-[#1473e6] px-3"><Search className="h-4 w-4 text-[#516f90]" /><input autoFocus className="min-w-0 flex-1 px-2 py-2 text-sm outline-none" placeholder="Search" value={industrySearch} onChange={(event) => setIndustrySearch(event.target.value)} /></div><div className="mt-2 max-h-64 overflow-y-auto">{filteredIndustries.map((industry) => <button type="button" key={industry} className="block w-full rounded px-2 py-2 text-left text-sm hover:bg-[#f1f5f9]" onClick={() => { setIndustryOpen(false); setIndustrySearch(""); updateDraft("industry", industry); void updateField("industry", industry); }}>{industry}</button>)}{!filteredIndustries.length ? <p className="px-2 py-3 text-sm text-[#516f90]">No industries found.</p> : null}</div></div> : null}{savingFields.has("industry") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("industry") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.industry ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.industry} <button type="button" className="underline" onClick={() => saveOnBlur("industry")}>Retry</button></span> : null}</span>
+        </div>
+        {baseTextFields.map(([label, field, value, Icon]) => (
           <label className="grid grid-cols-[26px_1fr] gap-3" key={label}>
             <Icon className="mt-6 h-4 w-4 text-[#516f90]" />
             <span>
               <span className="mb-1 block text-xs text-[#516f90]">{label}</span>
-              {type === "select" ? (
-                <select className="w-full rounded-md border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-[#213343] outline-none hover:border-[#dbe4ed] hover:bg-[#f7f9fb] focus:border-[#ff5c35] focus:bg-white">
-                  {value ? <option>{value}</option> : <option>{placeholder}</option>}
-                  <option>Lead</option>
-                  <option>Customer</option>
-                  <option>Opportunity</option>
-                  <option>Inactive</option>
-                </select>
-              ) : (
-                <input
-                  className="w-full rounded-md border border-transparent bg-transparent px-0 py-1 text-sm font-semibold text-[#213343] outline-none hover:border-[#dbe4ed] hover:bg-[#f7f9fb] focus:border-[#ff5c35] focus:bg-white"
-                  defaultValue={value}
-                  placeholder={placeholder}
-                />
-              )}
+              <input className="w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts[field]} disabled={savingFields.has(field)} onChange={(event) => updateDraft(field, event.target.value)} onBlur={() => saveOnBlur(field)} />
+              {savingFields.has(field) ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has(field) ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors[field] ? <span className="mt-1 block text-xs text-red-700">{fieldErrors[field]} <button type="button" className="underline" onClick={() => saveOnBlur(field)}>Retry</button></span> : null}
             </span>
           </label>
         ))}
+        <button className="lg:col-span-4 inline-flex items-center justify-center gap-2 rounded-md border border-[#cbd6e2] px-3 py-2 text-sm font-semibold text-[#516f90] hover:bg-[#f7f9fb]" type="button" onClick={() => setShowMore((current) => !current)}>{showMore ? "Show less" : "See more"}{showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+        {showMore ? <>
+          {additionalTextFields.map(([label, field, value, Icon]) => (
+            <label className="grid grid-cols-[26px_1fr] gap-3" key={label}>
+              <Icon className="mt-6 h-4 w-4 text-[#516f90]" />
+              <span>
+                <span className="mb-1 block text-xs text-[#516f90]">{label}</span>
+                <input className="w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts[field]} disabled={savingFields.has(field)} type={field === "numberOfEmployees" || field === "annualRevenue" ? "number" : "text"} onChange={(event) => updateDraft(field, event.target.value)} onBlur={() => saveOnBlur(field)} />
+                {savingFields.has(field) ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has(field) ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors[field] ? <span className="mt-1 block text-xs text-red-700">{fieldErrors[field]} <button type="button" className="underline" onClick={() => saveOnBlur(field)}>Retry</button></span> : null}
+              </span>
+            </label>
+          ))}
+          <label className="grid grid-cols-[26px_1fr] gap-3 lg:col-span-4"><FileUp className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">Description</span><textarea className="min-h-20 w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts.description} disabled={savingFields.has("description")} onChange={(event) => updateDraft("description", event.target.value)} onBlur={() => saveOnBlur("description")} />{savingFields.has("description") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("description") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.description ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.description} <button type="button" className="underline" onClick={() => saveOnBlur("description")}>Retry</button></span> : null}</span></label>
+        </> : null}
       </div>
     </aside>
   );
@@ -690,7 +815,7 @@ function ReactionRow() {
   );
 }
 
-function ActivityWorkspace() {
+function ActivityWorkspace({ meetings }: { meetings: Meeting[] }) {
   return (
     <section className="overflow-hidden rounded-lg border border-[#dbe4ed] bg-white shadow-sm">
       <div className="bg-[#f3f4f6] p-4">
@@ -726,13 +851,9 @@ function ActivityWorkspace() {
           <button className="px-2 py-3 text-sm font-bold text-[#343a40]">Clear all</button>
         </div>
 
-        <h3 className="mt-5 text-lg font-medium text-[#343a40]">Upcoming</h3>
+        <h3 className="mt-5 text-lg font-medium text-[#343a40]">Meetings</h3>
         <div className="mt-4 space-y-4">
-          <TimelineCard
-            title="Meeting - (Sample meeting) Cupcake creator ..."
-            date="Oct 15, 2026 at 1:29 PM GMT+5:30"
-            body="Hey guys, looking forward to taking a tour of the extra tasty cupcake factory tomorrow."
-          />
+          {meetings.length ? meetings.map((meeting) => <TimelineCard key={meeting.id} title={meeting.name} date={new Date(meeting.activityAt).toLocaleString()} body={[meeting.type, meeting.outcome, meeting.location].filter(Boolean).join(" · ") || "Company meeting"} />) : <p className="rounded-lg border border-dashed border-[#cbd6e2] p-5 text-sm text-[#516f90]">No meetings linked to this company yet.</p>}
         </div>
 
         <h3 className="mt-6 text-lg font-medium text-[#343a40]">October 2026</h3>

@@ -19,6 +19,7 @@ model User {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   activities       Activity[]
+  meetings         Meeting[]
   auditLogs        AuditLog[] @relation("AuditActor")
   ownedCompanies   Company[]  @relation("CompanyOwner")
   ownedContacts    Contact[]  @relation("ContactOwner")
@@ -93,6 +94,8 @@ model Company {
   regions                    String[]  @default([])
   parentCompanyId            String?
   ownerId                    String?
+  ownerName                  String?
+  lifecycleStage             String    @default("Subscriber")
   isArchived                 Boolean   @default(false)
   phone                      String?
   annualRevenue              Decimal?  @db.Decimal(14, 2)
@@ -118,6 +121,7 @@ model Company {
   deals                      Deal[]
   dealers                    Dealer[]
   leads                      Lead[]
+  meetings                   Meeting[]
 
   @@index([name])
   @@index([city, state])
@@ -127,6 +131,7 @@ model Company {
   @@index([customerType])
   @@index([companySize])
   @@index([customerSince])
+  @@index([lifecycleStage])
 }
 
 model Contact {
@@ -153,6 +158,7 @@ model Contact {
   deals           Deal[]
   leads           Lead[]
   notes           Note[]
+  meetings        Meeting[]
 
   @@index([email])
   @@index([phone])
@@ -271,6 +277,7 @@ model Deal {
   owner             User?          @relation("DealOwner", fields: [ownerId], references: [id])
   pipelineRecord    Pipeline?      @relation("DealPipelineRecord", fields: [pipelineId], references: [id])
   stageRecord       PipelineStage? @relation("DealStageRecord", fields: [stageId], references: [id])
+  meetings          Meeting[]
 
   @@index([pipeline, stage])
   @@index([pipelineId, stageId])
@@ -300,6 +307,33 @@ model Activity {
 
   @@index([type])
   @@index([createdAt])
+}
+
+model Meeting {
+  id          String   @id @default(cuid())
+  name        String
+  activityAt  DateTime
+  ownerId     String?
+  type        String?
+  outcome     String?
+  location    String?
+  contactId   String?
+  dealId      String?
+  companyId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  contact     Contact? @relation(fields: [contactId], references: [id])
+  deal        Deal?    @relation(fields: [dealId], references: [id])
+  company     Company? @relation(fields: [companyId], references: [id])
+
+  @@index([activityAt])
+  @@index([ownerId])
+  @@index([type])
+  @@index([outcome])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([companyId])
 }
 
 model Note {

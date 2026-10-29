@@ -21,6 +21,7 @@ import { SegmentsService } from "./segments/segments.service";
 import { ContactsModule } from "./contacts/contacts.module";
 import { ProductsModule } from "./products/products.module";
 import { PipelinesModule } from "./pipelines/pipelines.module";
+import { MeetingsModule } from "./meetings/meetings.module";
 
 const crmCrudModules = [
   ["RolesModule", "roles"],
@@ -66,6 +67,7 @@ const queueModules = queueEnabled ? [
     ContactsModule,
     ProductsModule,
     PipelinesModule,
+    MeetingsModule,
     DashboardModule,
     SegmentsModule,
     AuditLogsModule,

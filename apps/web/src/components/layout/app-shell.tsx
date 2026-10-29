@@ -22,6 +22,7 @@ const navigationItems = [
   ["Companies", Store, "/companies"],
   ["Deals", CheckSquare, "/deals"],
   ["Products", Store, "/products"],
+  ["Meetings", CalendarDays, "/meetings"],
   ["Segments", CalendarDays, "/segments"],
   ["Events", CalendarDays, "#"],
   ["Ads", Bell, "#"],
@@ -100,6 +101,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       ? pathname.startsWith("/companies")
                       : href === "/products"
                         ? pathname.startsWith("/products")
+                        : href === "/meetings"
+                          ? pathname.startsWith("/meetings")
                         : href === "/segments"
                           ? pathname.startsWith("/segments")
                           : false;

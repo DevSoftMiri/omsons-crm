@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CompanyDto } from "./companies.dto";
 
+export const COMPANY_LIFECYCLE_STAGES = ["Subscriber", "Lead", "Marketing Qualified Lead", "Sales Qualified Lead", "Opportunity", "Customer", "Evangelist", "Other"] as const;
+
 @Injectable()
 export class CompaniesService {
   // Keep the dependency typed for NestJS metadata; the cast isolates generated-client typing differences.
@@ -42,10 +44,14 @@ export class CompaniesService {
     return { [field]: scalar };
   }
 
-  private normalize(dto: CompanyDto) {
-    const { customFields, ...scalarFields } = dto;
+  private normalize(dto: CompanyDto): any {
+    const { customFields, ownerName: _ownerName, ...scalarFields } = dto;
     const regions = [...new Set((dto.regions ?? []).map((region) => region.trim()).filter(Boolean))];
-    return { ...scalarFields, name: dto.name.trim(), regions, customFields: (customFields ?? {}) as Prisma.InputJsonObject, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
+    if (dto.lifecycleStage !== undefined && !COMPANY_LIFECYCLE_STAGES.includes(dto.lifecycleStage as typeof COMPANY_LIFECYCLE_STAGES[number])) throw new BadRequestException("Invalid company lifecycle stage");
+    const normalizedCustomFields = customFields && typeof customFields === "object" && !Array.isArray(customFields)
+      ? Object.fromEntries(Object.entries(customFields).map(([key, value]) => [key.trim(), value == null ? "" : String(value)]).filter(([key]) => key))
+      : {};
+    return { ...scalarFields, ...(dto.name !== undefined ? { name: dto.name.trim() } : {}), regions, customFields: normalizedCustomFields as Prisma.InputJsonObject, parentCompanyId: dto.parentCompanyId || null, annualRevenue: dto.annualRevenue == null ? null : Number(dto.annualRevenue), customerSince: dto.customerSince ? new Date(dto.customerSince) : null, numberOfBlockers: Number(dto.numberOfBlockers ?? 0), numberOfBuyingRoleContacts: Number(dto.numberOfBuyingRoleContacts ?? 0), numberOfDecisionMakers: Number(dto.numberOfDecisionMakers ?? 0) };
   }
 
   private async validateParent(id: string | undefined, parentCompanyId: string | null) {
@@ -73,7 +79,7 @@ export class CompaniesService {
         id: true, name: true, industry: true, website: true, phone: true,
         city: true, state: true, country: true, regions: true,
         customerType: true, companySize: true, annualRevenue: true, customerSince: true,
-        parentCompanyId: true, ownerId: true, isArchived: true,
+        parentCompanyId: true, ownerId: true, ownerName: true, lifecycleStage: true, isArchived: true,
         createdAt: true, updatedAt: true,
         owner: { select: { id: true, name: true } }
         , contacts: { select: { leadStatus: true } }
@@ -90,7 +96,12 @@ export class CompaniesService {
   }
 
   async create(dto: CompanyDto) {
+    if (!dto.name?.trim()) throw new BadRequestException("Company name is required");
     const data = this.normalize(dto);
+    if (dto.ownerName !== undefined) {
+      data.ownerName = String(dto.ownerName ?? "").trim().replace(/\s+/g, " ") || null;
+      data.ownerId = null;
+    }
     await this.validateParent(undefined, data.parentCompanyId);
     return this.prisma.company.create({ data, include: this.include });
   }
@@ -99,6 +110,18 @@ export class CompaniesService {
     const data = this.normalize(dto);
     await this.findOne(id);
     await this.validateParent(id, data.parentCompanyId);
+    // PATCH requests from the detail header only contain one editable field.
+    // Do not let normalize()'s create-time defaults overwrite omitted values.
+    const defaultedFields = ["regions", "customFields", "parentCompanyId", "annualRevenue", "customerSince", "numberOfBlockers", "numberOfBuyingRoleContacts", "numberOfDecisionMakers"] as const;
+    if (dto.name === undefined) delete data.name;
+    for (const field of defaultedFields) {
+      if (dto[field] === undefined) delete data[field];
+    }
+
+    if (dto.ownerName !== undefined) {
+      (data as Record<string, unknown>).ownerName = String(dto.ownerName ?? "").trim().replace(/\s+/g, " ") || null;
+      data.ownerId = null;
+    }
     return this.prisma.company.update({ where: { id }, data, include: this.include });
   }
 
@@ -128,7 +151,7 @@ export class CompaniesService {
   async addContact(companyId: string, body: Record<string, unknown>) {
     await this.findOne(companyId);
     if (typeof body.firstName !== "string" || !body.firstName.trim()) throw new BadRequestException("First name is required");
-    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email: typeof body.email === "string" ? body.email.trim() || null : null, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, ownerId: typeof body.ownerId === "string" ? body.ownerId || null : null, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, lastContactedAt: body.lastContactedAt ? new Date(String(body.lastContactedAt)) : null, nextFollowUpAt: body.nextFollowUpAt ? new Date(String(body.nextFollowUpAt)) : null, contactSource: typeof body.contactSource === "string" ? body.contactSource || null : null, companyId } });
+    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email: typeof body.email === "string" ? body.email.trim() || null : null, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, department: typeof body.department === "string" ? body.department.trim() || null : null, roleInPurchase: typeof body.roleInPurchase === "string" ? body.roleInPurchase.trim() || null : null, ownerId: typeof body.ownerId === "string" ? body.ownerId || null : null, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, lastContactedAt: body.lastContactedAt ? new Date(String(body.lastContactedAt)) : null, nextFollowUpAt: body.nextFollowUpAt ? new Date(String(body.nextFollowUpAt)) : null, contactSource: typeof body.contactSource === "string" ? body.contactSource || null : null, companyId } });
   }
 
   async listContacts(companyId: string) {
@@ -141,8 +164,33 @@ export class CompaniesService {
     return this.prisma.contact.update({ where: { id: contactId }, data: { companyId } });
   }
 
+  async unlinkContact(companyId: string, contactId: string) {
+    await this.findOne(companyId);
+    const contact = await this.prisma.contact.findFirst({ where: { id: contactId, companyId }, select: { id: true } });
+    if (!contact) throw new NotFoundException("Contact is not associated with this company");
+    return this.prisma.contact.update({ where: { id: contactId }, data: { companyId: null } });
+  }
+
   async archive(id: string) { await this.findOne(id); return this.prisma.company.update({ where: { id }, data: { isArchived: true }, include: this.include }); }
   async restore(id: string) { await this.findOne(id); return this.prisma.company.update({ where: { id }, data: { isArchived: false }, include: this.include }); }
+
+  async permanentlyDelete(id: string, reassignChildrenTo?: string) {
+    return this.prisma.$transaction(async (tx: any) => {
+      const duplicate = await tx.company.findUnique({ where: { id }, select: { id: true, subCompanies: { select: { id: true } }, contacts: { select: { id: true } }, deals: { select: { id: true } }, leads: { select: { id: true } }, meetings: { select: { id: true } }, dealers: { select: { id: true } } } });
+      if (!duplicate) throw new NotFoundException("Company not found");
+      if (duplicate.contacts.length || duplicate.deals.length || duplicate.leads.length || duplicate.meetings.length || duplicate.dealers.length) throw new BadRequestException("Company has linked records and cannot be permanently deleted");
+      const children = duplicate.subCompanies.map((child: { id: string }) => child.id);
+      if (children.length && !reassignChildrenTo) throw new BadRequestException("Company has sub-companies; provide a destination company");
+      if (reassignChildrenTo) {
+        if (reassignChildrenTo === id) throw new BadRequestException("Children cannot be reassigned to the company being deleted");
+        const destination = await tx.company.findUnique({ where: { id: reassignChildrenTo }, select: { id: true, parentCompanyId: true, isArchived: true } });
+        if (!destination || destination.isArchived || destination.parentCompanyId) throw new BadRequestException("Children can only be reassigned to an active main company");
+        await tx.company.updateMany({ where: { parentCompanyId: id }, data: { parentCompanyId: reassignChildrenTo } });
+      }
+      await tx.company.delete({ where: { id } });
+      return { deletedCompanyId: id, reassignedChildIds: children, reassignChildrenTo: reassignChildrenTo ?? null };
+    });
+  }
 
   async addSubCompany(id: string, subCompanyId: string) {
     await this.findOne(id);

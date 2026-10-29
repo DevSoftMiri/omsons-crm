@@ -14,8 +14,10 @@ export class CompaniesController {
   @Post(":id/contacts") addContact(@Param("id") id: string, @Body() body: Record<string, unknown>) { return this.service.addContact(id, body); }
   @Get(":id/contacts") listContacts(@Param("id") id: string) { return this.service.listContacts(id); }
   @Post(":id/contacts/:contactId") linkContact(@Param("id") id: string, @Param("contactId") contactId: string) { return this.service.linkContact(id, contactId); }
+  @Delete(":id/contacts/:contactId") unlinkContact(@Param("id") id: string, @Param("contactId") contactId: string) { return this.service.unlinkContact(id, contactId); }
   @Post(":id/archive") archive(@Param("id") id: string) { return this.service.archive(id); }
   @Post(":id/restore") restore(@Param("id") id: string) { return this.service.restore(id); }
+  @Delete(":id/permanent") permanentlyDelete(@Param("id") id: string, @Query("reassignChildrenTo") reassignChildrenTo?: string) { return this.service.permanentlyDelete(id, reassignChildrenTo); }
   @Post(":id/sub-companies/:subCompanyId") addSubCompany(@Param("id") id: string, @Param("subCompanyId") subCompanyId: string) { return this.service.addSubCompany(id, subCompanyId); }
   @Delete(":id/sub-companies/:subCompanyId") unlinkSubCompany(@Param("id") id: string, @Param("subCompanyId") subCompanyId: string) { return this.service.unlinkSubCompany(id, subCompanyId); }
 }

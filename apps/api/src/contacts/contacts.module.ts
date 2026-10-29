@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Module, NotFoundException, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Module, NotFoundException, Param, Post, Query } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -57,11 +57,24 @@ class ContactsController {
     return contact;
   }
 
+  @Delete(":id")
+  async remove(@Param("id") id: string) {
+    await this.prisma.contact.findUniqueOrThrow({ where: { id }, select: { id: true } });
+    return this.prisma.contact.delete({ where: { id } });
+  }
+
   @Post()
   async create(@Body() body: Record<string, unknown>) {
     const firstName = String(body.firstName ?? "").trim();
     if (!firstName)
       return { statusCode: 400, message: "First name is required" };
+    const requestedOwner = String(body.ownerId ?? body.owner ?? "").trim();
+    const owner = requestedOwner
+      ? await this.prisma.user.findFirst({
+          where: { OR: [{ id: requestedOwner }, { name: { equals: requestedOwner, mode: "insensitive" } }] },
+          select: { id: true },
+        })
+      : null;
     return this.prisma.contact.create({
       data: {
         firstName,
@@ -74,10 +87,7 @@ class ContactsController {
         lifecycleStage: String(body.lifecycleStage ?? "").trim() || null,
         leadStatus: String(body.leadStatus ?? "").trim() || null,
         contactSource: String(body.contactSource ?? "").trim() || null,
-        ownerId:
-          typeof body.ownerId === "string" && body.ownerId
-            ? body.ownerId
-            : null,
+        ownerId: owner?.id ?? null,
         companyId:
           typeof body.companyId === "string" && body.companyId
             ? body.companyId
