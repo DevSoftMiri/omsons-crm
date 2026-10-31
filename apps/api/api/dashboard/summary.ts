@@ -12,5 +12,7 @@ export default async function dashboardSummary(req: VercelRequest, res: VercelRe
     handler = app.getHttpAdapter().getInstance();
   }
 
-  return handler(req, res);
+  const currentHandler = handler;
+  if (!currentHandler) return res.status(503).json({ message: "API is initializing" });
+  return currentHandler(req, res);
 }
