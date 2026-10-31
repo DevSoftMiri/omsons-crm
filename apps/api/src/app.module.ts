@@ -22,6 +22,7 @@ import { ContactsModule } from "./contacts/contacts.module";
 import { ProductsModule } from "./products/products.module";
 import { PipelinesModule } from "./pipelines/pipelines.module";
 import { MeetingsModule } from "./meetings/meetings.module";
+import { NotesModule } from "./notes/notes.module";
 
 const crmCrudModules = [
   ["RolesModule", "roles"],
@@ -30,7 +31,6 @@ const crmCrudModules = [
   ["ContactsModule", "contacts"],
   ["DealersModule", "dealers"],
   ["ActivitiesModule", "activities"],
-  ["NotesModule", "notes"],
   ["TasksModule", "tasks"],
   ["FollowUpsModule", "follow-ups"],
   ["VisitsModule", "visits"],
@@ -68,6 +68,7 @@ const queueModules = queueEnabled ? [
     ProductsModule,
     PipelinesModule,
     MeetingsModule,
+    NotesModule,
     DashboardModule,
     SegmentsModule,
     AuditLogsModule,

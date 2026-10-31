@@ -122,6 +122,8 @@ model Company {
   dealers                    Dealer[]
   leads                      Lead[]
   meetings                   Meeting[]
+  notes                      Note[]
+  followUps                  FollowUp[]
 
   @@index([name])
   @@index([city, state])
@@ -338,15 +340,32 @@ model Meeting {
 
 model Note {
   id        String   @id @default(cuid())
+  title     String?
   body      String
+  companyId String?
   leadId    String?
   contactId String?
   authorId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   author    User?    @relation(fields: [authorId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
   contact   Contact? @relation(fields: [contactId], references: [id])
+  links     NoteActivity[]
+  followUps FollowUp[]
   lead      Lead?    @relation(fields: [leadId], references: [id])
+}
+
+model NoteActivity {
+  id         String   @id @default(cuid())
+  noteId     String
+  activityId String
+  kind       String
+  note       Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([noteId, activityId, kind])
+  @@index([activityId, kind])
 }
 
 model Task {
@@ -373,10 +392,15 @@ model FollowUp {
   completedAt DateTime?
   leadId      String?
   ownerId     String?
+  companyId   String?
+  noteId      String?
+  type        String    @default("TASK")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   lead        Lead?     @relation(fields: [leadId], references: [id])
   owner       User?     @relation(fields: [ownerId], references: [id])
+  company     Company?  @relation(fields: [companyId], references: [id])
+  note        Note?     @relation(fields: [noteId], references: [id])
 
   @@index([dueAt])
   @@index([completedAt])

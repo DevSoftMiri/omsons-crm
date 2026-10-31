@@ -56,6 +56,7 @@ const repairContactText = (value?: string | null) => {
   }
 };
 type CompanyDeal = { id: string; name: string; amount?: number | string | null; stage: string; closeDate?: string | null; contactId?: string | null };
+type CompanyNote = { id: string; title?: string | null; body: string; createdAt: string; links?: Array<{ activityId: string; kind: string }> };
 type CompanyRecord = { id: string; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
 
 const _info = [
@@ -83,8 +84,14 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
   const [selectedSubCompany, setSelectedSubCompany] = useState("");
   const [error, setError] = useState("");
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [companyMeetings, setCompanyMeetings] = useState<Meeting[]>([]);
+  const [companyNotes, setCompanyNotes] = useState<CompanyNote[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
+  const [meetingsError, setMeetingsError] = useState("");
   const loadCompany = async () => {
+    setMeetingsLoading(true);
+    setMeetingsError("");
     const response = await fetch(`${API_URL}/companies`, { cache: "no-store" });
     const result = await response.json() as { data: CompanyRecord[] };
     const records = result.data ?? [];
@@ -98,8 +105,31 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
     }
     const loaded = await detail.json() as Partial<CompanyRecord>;
     setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: Array.isArray(loaded.deals) ? loaded.deals : [], regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: loaded.id ?? companyId, name: loaded.name ?? "Company", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
-    const meetingsResponse = await fetch(`${API_URL}/meetings?companyId=${encodeURIComponent((loaded.id ?? companyId) as string)}&limit=100`, { cache: "no-store" });
-    if (meetingsResponse.ok) setCompanyMeetings(((await meetingsResponse.json()) as { data?: Meeting[] }).data ?? []);
+    try {
+      const linkedCompanyId = encodeURIComponent((loaded.id ?? companyId) as string);
+      const firstPageResponse = await fetch(`${API_URL}/meetings?companyId=${linkedCompanyId}&page=1&limit=100&sortBy=activityAt&sortOrder=desc`, { cache: "no-store" });
+      if (!firstPageResponse.ok) throw new Error("Unable to load company meetings");
+      const firstPage = await firstPageResponse.json() as { data?: Meeting[]; limit?: number; total?: number };
+      const meetings = [...(firstPage.data ?? [])];
+      const limit = firstPage.limit ?? 100;
+      const pages = Math.ceil((firstPage.total ?? meetings.length) / limit);
+      if (pages > 1) {
+        const remainingPages = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => fetch(`${API_URL}/meetings?companyId=${linkedCompanyId}&page=${index + 2}&limit=${limit}&sortBy=activityAt&sortOrder=desc`, { cache: "no-store" }).then(async (pageResponse) => {
+          if (!pageResponse.ok) throw new Error("Unable to load all company meetings");
+          return pageResponse.json() as Promise<{ data?: Meeting[] }>;
+        })));
+        remainingPages.forEach((page) => meetings.push(...(page.data ?? [])));
+      }
+      meetings.sort((left, right) => new Date(right.activityAt).getTime() - new Date(left.activityAt).getTime() || right.id.localeCompare(left.id));
+      setCompanyMeetings(meetings);
+      const notesResponse = await fetch(`${API_URL}/notes?companyId=${linkedCompanyId}`, { cache: "no-store" });
+      if (notesResponse.ok) setCompanyNotes(((await notesResponse.json()) as { data?: CompanyNote[] }).data ?? []);
+    } catch (meetingError) {
+      setCompanyMeetings([]);
+      setMeetingsError(meetingError instanceof Error ? meetingError.message : "Unable to load company meetings");
+    } finally {
+      setMeetingsLoading(false);
+    }
   };
   useEffect(() => { void Promise.all([loadCompany(), fetch(`${API_URL}/users?limit=100`, { cache: "no-store" }).then((response) => response.json()).then((payload: { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>) => setUsers(Array.isArray(payload) ? payload : payload.data ?? []))]).catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
   useEffect(() => {
@@ -121,7 +151,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
           <span className="font-semibold text-[#213343]">{company?.name ?? "Loading company..."}</span>
         </div>
 
-        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => setMeetingModalOpen(true)} />
+        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => setMeetingModalOpen(true)} onOpenNote={() => setNoteModalOpen(true)} />
         <section className="mt-4 space-y-3">
 
             <div className="grid grid-cols-4 border-b border-[#dbe4ed] bg-transparent text-sm">
@@ -153,7 +183,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
             ) : null}
             {activeTab === "Activities" ? (
               <div className={`relative grid gap-4 pt-2 ${rightRailCollapsed ? "xl:grid-cols-[minmax(0,1fr)_0px]" : "xl:grid-cols-[minmax(0,1fr)_380px]"}`}>
-                <ActivityWorkspace meetings={companyMeetings} />
+                <ActivityWorkspace meetings={companyMeetings} notes={companyNotes} loading={meetingsLoading} error={meetingsError} />
                 <button className="absolute right-[368px] top-8 z-10 hidden h-9 w-9 place-items-center rounded-full border border-[#9fb3c8] bg-white shadow-sm xl:grid" onClick={() => setRightRailCollapsed((collapsed) => !collapsed)} type="button" aria-label="Toggle related records">
                   <ChevronRight className={`h-4 w-4 transition ${rightRailCollapsed ? "rotate-180" : ""}`} />
                 </button>
@@ -179,6 +209,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
         </section>
       </div>
       {meetingModalOpen && company ? <MeetingModal meeting={null} users={users} contacts={company.contacts.map((contact) => ({ id: contact.id, firstName: contact.firstName, lastName: contact.lastName, email: contact.email }))} deals={company.deals.map((deal) => ({ id: deal.id, name: deal.name }))} companies={companies.map((item) => ({ id: item.id, name: item.name, parentCompanyId: item.parentCompanyId }))} initialCompanyId={company.id} initialCompanyName={company.name} onClose={() => setMeetingModalOpen(false)} onSaved={async () => { setMeetingModalOpen(false); await loadCompany(); }} /> : null}
+      {noteModalOpen && company ? <CreateNoteModal company={company} users={users} onClose={() => setNoteModalOpen(false)} onSaved={async () => { setNoteModalOpen(false); await loadCompany(); }} /> : null}
     </AppShell>
   );
 }
@@ -407,7 +438,30 @@ function PlaceholderTab({ title }: { title: string }) {
   );
 }
 
-function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void }) {
+function CreateNoteModal({ company, users, onClose, onSaved }: { company: CompanyRecord; users: Array<{ id: string; name: string }>; onClose: () => void; onSaved: () => Promise<void> }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [followUp, setFollowUp] = useState(false);
+  const [followUpType, setFollowUpType] = useState("TASK");
+  const [followUpTitle, setFollowUpTitle] = useState("");
+  const [ownerId, setOwnerId] = useState("");
+  const [dueAt, setDueAt] = useState(() => new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { void fetch(`${API_URL}/meetings?companyId=${encodeURIComponent(company.id)}&limit=100`, { cache: "no-store" }).then((response) => response.json()).then((payload: { data?: Meeting[] }) => setMeetings(payload.data ?? [])).catch(() => setError("Unable to load existing activities")); }, [company.id]);
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !saving) onClose(); }; document.addEventListener("keydown", onKey); return () => document.removeEventListener("keydown", onKey); }, [onClose, saving]);
+  const applyFormat = (command: string, value?: string) => { const selection = window.getSelection(); if (!selection?.rangeCount) return; if (command === "link") { const url = window.prompt("Link URL", "https://"); if (!url) return; const anchor = document.createElement("a"); anchor.href = url; anchor.target = "_blank"; anchor.rel = "noreferrer"; const range = selection.getRangeAt(0); try { range.surroundContents(anchor); } catch { anchor.textContent = range.toString(); range.deleteContents(); range.insertNode(anchor); } } else if (command === "heading") { const range = selection.getRangeAt(0); const block = range.commonAncestorContainer.parentElement?.closest("p,div,h1,h2,h3") ?? range.commonAncestorContainer.parentElement; if (block) { const heading = document.createElement(value || "h2"); heading.innerHTML = block.innerHTML; block.replaceWith(heading); } } else if (command === "bullet" || command === "number") { const list = document.createElement(command === "bullet" ? "ul" : "ol"); list.className = "ml-6 list-disc"; const item = document.createElement("li"); item.innerHTML = selection.toString() || "List item"; list.appendChild(item); const range = selection.getRangeAt(0); range.deleteContents(); range.insertNode(list); } else { const tag = command === "bold" ? "strong" : command === "italic" ? "em" : command === "underline" ? "u" : "s"; const range = selection.getRangeAt(0); const node = document.createElement(tag); node.textContent = selection.toString(); range.deleteContents(); range.insertNode(node); } editorRef.current?.focus(); setBody(editorRef.current?.innerHTML ?? ""); };
+  const plainBody = body.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); if (!plainBody) { setError("Note content is required"); return; } setSaving(true); setError(""); try { const response = await fetch(`${API_URL}/notes`, { method: "POST", headers: createHeaders(createIdempotencyKey()), body: JSON.stringify({ title, body, companyId: company.id, links: selected.map((id) => ({ id, kind: "MEETING" })), followUp: followUp ? { enabled: true, title: followUpTitle || title || plainBody.slice(0, 80), type: followUpType, dueAt, ownerId } : undefined }) }); if (!response.ok) { const payload = await response.json().catch(() => null) as { message?: string } | null; throw new Error(payload?.message || "Unable to create note"); } await onSaved(); } catch (submitError) { setError(submitError instanceof Error ? submitError.message : "Unable to create note"); } finally { setSaving(false); } };
+  const presets = [{ label: "In 2 business days", days: 2 }, { label: "In 3 business days", days: 3 }, { label: "In 1 week", days: 5 }, { label: "In 2 weeks", days: 10 }, { label: "In 1 month", days: 22 }];
+  const businessDate = (days: number) => { const date = new Date(); let added = 0; while (added < days) { date.setDate(date.getDate() + 1); if (date.getDay() !== 0 && date.getDay() !== 6) added++; } return date.toLocaleDateString(); };
+  return <div className="fixed inset-0 z-[110] grid place-items-center bg-[#111827]/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}><form className="flex max-h-[92vh] w-full max-w-[850px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onSubmit={submit}><div className="flex items-center justify-between border-b border-[#dbe4ed] px-5 py-4"><h2 className="text-lg font-bold text-[#213343]">Create note</h2><button type="button" aria-label="Close" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-y-auto p-5"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-[#8293a6]">Note title<input className="mt-1 w-full rounded-md border border-[#cbd6e2] px-3 py-2 text-sm font-normal text-[#213343]" placeholder="Enter a note title" value={title} onChange={(event) => { setTitle(event.target.value); if (!followUpTitle) setFollowUpTitle(event.target.value); }} /></label><label className="text-xs font-semibold text-[#8293a6]">Company<input className="mt-1 w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-3 py-2 text-sm font-normal text-[#213343]" value={company.name} readOnly /></label></div><label className="mt-4 block text-xs font-semibold text-[#8293a6]">Note<div className="mt-1 overflow-hidden rounded-md border border-[#cbd6e2]"><div className="flex flex-wrap gap-1 border-b border-[#dbe4ed] bg-[#f7f9fb] p-2">{[["Paragraph", "heading", "p"], ["B", "bold"], ["I", "italic"], ["U", "underline"], ["S", "strike"], ["• List", "bullet"], ["1. List", "number"], ["Quote", "heading", "blockquote"], ["Link", "link"]].map(([label, command, value]) => <button key={`${label}-${command}`} type="button" className="rounded px-2 py-1 text-xs font-semibold text-[#213343] hover:bg-white" aria-label={label} onClick={() => applyFormat(command, value)}>{label}</button>)}</div><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Note content" data-placeholder="Start typing your company notes…" className="min-h-40 p-4 text-sm font-normal text-[#213343] outline-none empty:before:text-[#9aaabd] empty:before:content-[attr(data-placeholder)]" onInput={(event) => setBody(event.currentTarget.innerHTML)} /></div></label><p className="mt-2 text-[11px] text-[#8293a6]">Write paragraphs, bullet points, numbered lists, or a mix of formats.</p><div className="mt-5"><div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#213343]">Associated with <span className="rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1 text-xs">▧ {company.name}</span><span className="text-xs text-[#007a8a]">+ Link existing activity</span></div><div className="mt-2 flex flex-wrap gap-2">{meetings.map((meeting) => <label className="inline-flex items-center gap-1 rounded-full border border-[#cbd6e2] px-2 py-1 text-xs" key={meeting.id}><input type="checkbox" checked={selected.includes(meeting.id)} onChange={() => setSelected((current) => current.includes(meeting.id) ? current.filter((id) => id !== meeting.id) : [...current, meeting.id])} />{meeting.name}</label>)}</div>{!meetings.length ? <p className="mt-2 text-xs text-[#8293a6]">No existing meetings found for this company.</p> : null}</div><label className="mt-5 flex items-center gap-2 border-t border-[#e7edf3] pt-4 text-sm text-[#213343]"><input type="checkbox" checked={followUp} onChange={(event) => setFollowUp(event.target.checked)} />Create a follow-up activity</label>{followUp ? <div className="mt-3 grid gap-3 rounded-lg bg-[#f7f9fb] p-3 sm:grid-cols-2"><label className="text-xs font-semibold text-[#516f90]">Activity type<select className="mt-1 w-full rounded border px-2 py-2 text-sm" value={followUpType} onChange={(event) => setFollowUpType(event.target.value)}><option value="TASK">To-do</option><option value="CALL">Call</option><option value="EMAIL">Email</option></select></label><label className="text-xs font-semibold text-[#516f90]">Assigned to<select className="mt-1 w-full rounded border px-2 py-2 text-sm" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}><option value="">No owner</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label><label className="text-xs font-semibold text-[#516f90] sm:col-span-2">Follow-up title<input className="mt-1 w-full rounded border px-2 py-2 text-sm" value={followUpTitle || title} onChange={(event) => setFollowUpTitle(event.target.value)} /></label><div className="sm:col-span-2"><p className="text-xs font-semibold text-[#516f90]">Follow-up date and time</p><div className="mt-1 flex flex-wrap gap-2">{presets.map((preset) => <button type="button" key={preset.label} className="rounded border px-2 py-1 text-xs" onClick={() => { const date = new Date(); let added = 0; while (added < preset.days) { date.setDate(date.getDate() + 1); if (date.getDay() !== 0 && date.getDay() !== 6) added++; } setDueAt(date.toISOString().slice(0, 16)); }}>{preset.label} ({businessDate(preset.days)})</button>)}<input className="rounded border px-2 py-1 text-sm" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></div></div></div> : null}{error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}</div><div className="flex justify-end gap-3 border-t border-[#dbe4ed] px-5 py-4"><button type="button" className="rounded-md border border-[#cbd6e2] px-4 py-2 text-sm" onClick={onClose}>Cancel</button><button type="submit" disabled={saving} className="rounded-md bg-[#007a83] px-5 py-2 text-sm font-semibold text-white">{saving ? "Creating..." : "Create note"}</button></div></form></div>;
+}
+
+function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting, onOpenNote }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void; onOpenNote: () => void }) {
   const companyName = company?.name ?? "Loading company...";
   const website = company?.website?.replace(/^https?:\/\//, "") ?? "No website";
   const isSubCompany = Boolean(company?.parentCompany);
@@ -434,7 +488,7 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
           <div className="flex shrink-0 items-start gap-3 lg:order-3 lg:ml-auto">
             <button className="hidden items-center gap-2 rounded-md border border-[#cbd6e2] px-4 py-2 text-sm font-bold lg:inline-flex">Actions <ChevronDown className="h-4 w-4" /></button>
             <div className="grid grid-cols-6 gap-2 text-center text-[11px]">
-              {[["Note", MessageSquarePlus], ["Email", Mail], ["Call", Phone], ["Task", Target], ["Meeting", CalendarDays], ["More", Ellipsis]].map(([label, Icon]) => <button className="min-w-0 text-center" key={label as string} type="button" onClick={label === "Meeting" ? onOpenMeeting : undefined}><span className="mx-auto grid h-9 w-9 place-items-center rounded-full border border-[#9fb3c8]"><Icon className="h-4 w-4" /></span><span className="mt-1 block truncate">{label as string}</span></button>)}
+              {[["Note", MessageSquarePlus], ["Email", Mail], ["Call", Phone], ["Task", Target], ["Meeting", CalendarDays], ["More", Ellipsis]].map(([label, Icon]) => <button className="min-w-0 text-center" key={label as string} type="button" onClick={label === "Meeting" ? onOpenMeeting : label === "Note" ? onOpenNote : undefined}><span className="mx-auto grid h-9 w-9 place-items-center rounded-full border border-[#9fb3c8]"><Icon className="h-4 w-4" /></span><span className="mt-1 block truncate">{label as string}</span></button>)}
             </div>
           </div>
           <div className="flex min-w-0 items-center gap-3 lg:order-1">
@@ -816,14 +870,16 @@ function ReactionRow() {
   );
 }
 
-function ActivityWorkspace({ meetings }: { meetings: Meeting[] }) {
+function ActivityWorkspace({ meetings, notes, loading, error }: { meetings: Meeting[]; notes: CompanyNote[]; loading: boolean; error: string }) {
+  const [activeActivityTab, setActiveActivityTab] = useState("All activities");
+  const meetingTabActive = activeActivityTab === "Meetings";
   return (
     <section className="overflow-hidden rounded-lg border border-[#dbe4ed] bg-white shadow-sm">
       <div className="bg-[#f3f4f6] p-4">
         <div className="border-b border-[#cbd6e2]">
           <div className="flex flex-wrap gap-1 text-sm font-semibold text-[#343a40]">
             {["All activities", "Notes", "Emails", "Calls", "Tasks", "Meetings"].map((item, index) => (
-              <button className={`mr-3 px-0 py-3 ${index === 0 ? "border-b-4 border-[#343a40] text-[#111827]" : ""}`} key={item}>
+              <button type="button" onClick={() => setActiveActivityTab(item)} className={`mr-3 px-0 py-3 ${activeActivityTab === item ? "border-b-4 border-[#343a40] text-[#111827]" : "text-[#516f90]"}`} key={item}>
                 {item}
               </button>
             ))}
@@ -852,10 +908,14 @@ function ActivityWorkspace({ meetings }: { meetings: Meeting[] }) {
           <button className="px-2 py-3 text-sm font-bold text-[#343a40]">Clear all</button>
         </div>
 
-        <h3 className="mt-5 text-lg font-medium text-[#343a40]">Meetings</h3>
+        <div className="mt-5 flex items-center justify-between gap-3"><h3 className="text-lg font-medium text-[#343a40]">{meetingTabActive ? "All meetings" : "Meetings"}</h3><span className="rounded-full bg-[#e8eef4] px-3 py-1 text-xs font-semibold text-[#516f90]">{meetings.length} {meetings.length === 1 ? "meeting" : "meetings"}</span></div>
         <div className="mt-4 space-y-4">
+          {loading ? <p className="rounded-lg border border-dashed border-[#cbd6e2] p-5 text-sm text-[#516f90]">Loading meetings...</p> : null}
+          {error ? <p className="rounded-lg border border-dashed border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</p> : null}
           {meetings.length ? meetings.map((meeting) => <TimelineCard key={meeting.id} title={meeting.name} date={new Date(meeting.activityAt).toLocaleString()} body={[meeting.type, meeting.location].filter(Boolean).join(" · ") || "Company meeting"} outcome={meeting.outcome} />) : <p className="rounded-lg border border-dashed border-[#cbd6e2] p-5 text-sm text-[#516f90]">No meetings linked to this company yet.</p>}
         </div>
+
+        {notes.length ? <><h3 className="mt-6 text-lg font-medium text-[#343a40]">Notes</h3><div className="mt-4 space-y-3">{notes.map((note) => <article className="rounded-2xl border border-[#d0d7de] bg-white p-4" key={note.id}><h4 className="font-bold text-[#213343]">{note.title || "Note"}</h4><div className="prose prose-sm mt-2 max-w-none text-[#343a40]" dangerouslySetInnerHTML={{ __html: note.body }} /><p className="mt-3 text-xs text-[#516f90]">{new Date(note.createdAt).toLocaleString()}</p></article>)}</div></> : null}
 
         <h3 className="mt-6 text-lg font-medium text-[#343a40]">October 2026</h3>
         <div className="mt-4 space-y-3">
@@ -887,19 +947,26 @@ function FilterButton({ label }: { label: string }) {
 const meetingOutcomeClass: Record<string, string> = { Scheduled: "border-blue-200 bg-blue-50 text-blue-700", Completed: "border-green-200 bg-green-50 text-green-700", Rescheduled: "border-amber-200 bg-amber-50 text-amber-700", Cancelled: "border-red-200 bg-red-50 text-red-700", "No show": "border-purple-200 bg-purple-50 text-purple-700" };
 
 function TimelineCard({ title, date, body, outcome }: { title: string; date: string; body: string; outcome?: string | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const isMeeting = title !== "Logged call" && title !== "Record Enriched";
   return (
     <article className="rounded-2xl border border-[#d0d7de] bg-white p-4 shadow-[0_8px_20px_rgba(33,51,67,0.08)]">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <ChevronRight className="h-4 w-4 shrink-0 text-[#516f90]" />
+          {isMeeting ? <button type="button" className="shrink-0" aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`} onClick={() => setExpanded((current) => !current)}><ChevronRight className={`h-4 w-4 text-[#516f90] transition-transform ${expanded ? "rotate-90" : ""}`} /></button> : <ChevronRight className="h-4 w-4 shrink-0 text-[#516f90]" />}
           <h4 className="truncate text-sm font-bold text-[#343a40]">{title}</h4>
         </div>
         <time className="shrink-0 text-xs text-[#516f90]">{date}</time>
       </div>
       <p className="mt-3 pl-7 text-sm leading-6 text-[#343a40]">{body}</p>
       {outcome ? <span className={`ml-7 mt-2 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${meetingOutcomeClass[outcome] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}>{outcome}</span> : null}
+      {isMeeting && expanded ? <div className="mt-4 grid gap-3 border-t border-[#e7edf3] pl-7 pt-4 text-sm sm:grid-cols-2"><MeetingDetail label="Details" value={body} /><MeetingDetail label="Status" value={outcome ?? "No outcome"} /></div> : null}
     </article>
   );
+}
+
+function MeetingDetail({ label, value }: { label: string; value: string }) {
+  return <div><span className="block text-xs font-semibold uppercase tracking-wide text-[#8293a6]">{label}</span><span className="mt-1 block text-[#213343]">{value}</span></div>;
 }
 
 function _ActionButton({ active, icon: Icon, label }: { active?: boolean; icon: typeof Mail; label: string }) {
