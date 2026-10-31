@@ -93,6 +93,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
     setMeetingsLoading(true);
     setMeetingsError("");
     const response = await fetch(`${API_URL}/companies?limit=100`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Unable to load companies from the production API");
     const result = await response.json() as { data: CompanyRecord[] };
     const records = result.data ?? [];
     setCompanies(records);
@@ -107,7 +108,8 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       }
       if (!detail.ok) throw new Error("Company not found in the production database");
     }
-    const loaded = await detail.json() as Partial<CompanyRecord>;
+    const loaded = await detail.json().catch(() => ({})) as Partial<CompanyRecord>;
+    if (!loaded.id && !loaded.name) throw new Error("Company response was invalid");
     setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: Array.isArray(loaded.deals) ? loaded.deals : [], regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: loaded.id ?? companyId, name: loaded.name ?? "Company", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
     try {
       const linkedCompanyId = encodeURIComponent((loaded.id ?? companyId) as string);
@@ -135,7 +137,19 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       setMeetingsLoading(false);
     }
   };
-  useEffect(() => { void Promise.all([loadCompany(), fetch(`${API_URL}/users?limit=20`, { cache: "no-store" }).then(async (response) => { if (!response.ok) return { data: [] }; return response.json(); }).then((payload: { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>) => setUsers(Array.isArray(payload) ? payload : payload.data ?? []))]).catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
+  useEffect(() => { void loadCompany().catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
+  const openMeeting = async () => {
+    try {
+      const response = await fetch(`${API_URL}/users`, { cache: "no-store" });
+      if (response.ok) {
+        const payload = await response.json() as { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>;
+        setUsers(Array.isArray(payload) ? payload : payload.data ?? []);
+      }
+    } catch {
+      setUsers([]);
+    }
+    setMeetingModalOpen(true);
+  };
   useEffect(() => {
     const onScroll = () => setHeaderCompact(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -155,7 +169,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
           <span className="font-semibold text-[#213343]">{company?.name ?? "Loading company..."}</span>
         </div>
 
-        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => setMeetingModalOpen(true)} onOpenNote={() => setNoteModalOpen(true)} />
+        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => void openMeeting()} onOpenNote={() => setNoteModalOpen(true)} />
         <section className="mt-4 space-y-3">
 
             <div className="grid grid-cols-4 border-b border-[#dbe4ed] bg-transparent text-sm">
