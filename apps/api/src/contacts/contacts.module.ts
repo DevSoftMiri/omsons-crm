@@ -7,10 +7,12 @@ class ContactsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  async list(@Query("search") search = "") {
+  async list(@Query("search") search = "", @Query("companyId") companyId = "") {
     const value = search.trim();
     return this.prisma.contact.findMany({
-      where: value
+      where: {
+        ...(companyId ? { companyId } : {}),
+        ...(value
         ? {
             OR: [
               { firstName: { contains: value, mode: "insensitive" } },
@@ -18,7 +20,8 @@ class ContactsController {
               { email: { contains: value, mode: "insensitive" } },
             ],
           }
-        : undefined,
+        : {}),
+      },
       include: {
         company: { select: { id: true, name: true } },
         owner: { select: { id: true, name: true } },
