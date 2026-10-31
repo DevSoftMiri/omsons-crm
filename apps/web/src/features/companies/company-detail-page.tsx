@@ -92,7 +92,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
   const loadCompany = async () => {
     setMeetingsLoading(true);
     setMeetingsError("");
-    const response = await fetch(`${API_URL}/companies`, { cache: "no-store" });
+    const response = await fetch(`${API_URL}/companies?limit=100`, { cache: "no-store" });
     const result = await response.json() as { data: CompanyRecord[] };
     const records = result.data ?? [];
     setCompanies(records);
@@ -100,8 +100,12 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
     if (!detail.ok) {
       const normalized = companyId.toLowerCase().replace(/-/g, " ");
       const match = records.find((record) => record.id === companyId || record.name.toLowerCase() === normalized || record.name.toLowerCase().replace(/\s+/g, "-") === companyId.toLowerCase());
-      if (!match) throw new Error("Company not found");
-      detail = await fetch(`${API_URL}/companies/${match.id}`, { cache: "no-store" });
+      if (match) detail = await fetch(`${API_URL}/companies/${match.id}`, { cache: "no-store" });
+      if (!detail.ok && match) {
+        setCompany(match as CompanyRecord);
+        detail = new Response(JSON.stringify(match), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (!detail.ok) throw new Error("Company not found in the production database");
     }
     const loaded = await detail.json() as Partial<CompanyRecord>;
     setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: Array.isArray(loaded.deals) ? loaded.deals : [], regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: loaded.id ?? companyId, name: loaded.name ?? "Company", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
@@ -131,7 +135,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       setMeetingsLoading(false);
     }
   };
-  useEffect(() => { void Promise.all([loadCompany(), fetch(`${API_URL}/users?limit=100`, { cache: "no-store" }).then((response) => response.json()).then((payload: { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>) => setUsers(Array.isArray(payload) ? payload : payload.data ?? []))]).catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
+  useEffect(() => { void Promise.all([loadCompany(), fetch(`${API_URL}/users?limit=20`, { cache: "no-store" }).then(async (response) => { if (!response.ok) return { data: [] }; return response.json(); }).then((payload: { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>) => setUsers(Array.isArray(payload) ? payload : payload.data ?? []))]).catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
   useEffect(() => {
     const onScroll = () => setHeaderCompact(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
