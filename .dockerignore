@@ -1,0 +1,10 @@
+node_modules
+.git
+.next
+dist
+apps/web/.next
+apps/api/dist
+apps/api/.env
+apps/web/.env
+*.tsbuildinfo
+npm-debug.log

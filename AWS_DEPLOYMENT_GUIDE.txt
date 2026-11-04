@@ -1,0 +1,507 @@
+OMSONS CRM - BEGINNER AWS STAGING DEPLOYMENT GUIDE
+===================================================
+
+This guide is written for this repository:
+
+  apps/web  = Next.js frontend
+  apps/api  = NestJS backend API
+  apps/api/prisma = Prisma schema and database migrations
+
+RECOMMENDED ARCHITECTURE FOR YOUR CURRENT AWS ACCOUNT
+------------------------------------------------------
+
+Because AWS App Runner is unavailable for your account, deploy both applications
+to one EC2 instance:
+
+  GitHub -> EC2 -> Next.js frontend container
+                 -> NestJS API container
+                 -> Nginx reverse proxy
+  AWS RDS PostgreSQL -> application database
+
+This gives you one server to access from your terminal and one place to pull the
+project from GitHub. Docker Compose will run the frontend and API together.
+RDS remains separate because a managed database is safer and easier to back up.
+
+You may run PostgreSQL and Redis on EC2 too, but that makes backups, upgrades,
+security, and data recovery your responsibility. For a first staging deployment,
+use RDS for PostgreSQL and only add Redis on EC2 if the application needs it.
+
+EC2 does not provide a custom free domain. You can test with the EC2 public IP or
+public DNS name. For proper HTTPS, use a domain name and point it to EC2, then
+use Nginx and Let's Encrypt.
+
+AWS will provide temporary HTTPS URLs automatically. They normally look like:
+
+  https://main.xxxxxxxxx.amplifyapp.com       (frontend)
+  https://xxxxxxxxxxxxxx.us-east-1.awsapprunner.com (API)
+
+If AWS App Runner is unavailable for your account, use this fallback:
+
+  GitHub -> AWS Amplify       -> Next.js frontend
+  GitHub -> EC2               -> NestJS API (Docker)
+  AWS RDS PostgreSQL          -> application database
+
+The EC2 fallback is documented in Part 13 below.
+
+These are free staging subdomains supplied by AWS. They are not a free custom
+domain name. AWS services can still incur charges, especially RDS, App Runner,
+data transfer, and a domain purchased through Route 53. Check the current AWS
+Free Tier page and billing dashboard before creating resources.
+
+IMPORTANT SECURITY RULES
+------------------------
+1. Never commit apps/api/.env, apps/web/.env, passwords, JWT secrets, or keys.
+2. Rotate any secret that has already been committed or shared.
+3. Use a separate AWS account or separate staging database for staging.
+4. Turn on an AWS Budget alert before creating paid resources.
+5. Do not use `prisma db push` for production/staging after migrations exist.
+   Use `prisma migrate deploy`.
+
+
+PART 1 - CHECK THE PROJECT BEFORE DEPLOYING
+-------------------------------------------
+
+Open PowerShell in the repository root:
+
+  cd "C:\path\to\omsons crm"
+  npm install
+  npm run db:generate
+  npm run build
+
+Confirm these files are committed to GitHub:
+
+  package.json
+  package-lock.json
+  apps/web/package.json
+  apps/api/package.json
+  apps/api/prisma/schema.prisma
+  apps/api/prisma/migrations/
+
+The API schema uses both DATABASE_URL and DIRECT_URL:
+
+  datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+  }
+
+The API also has optional Redis/BullMQ support. For the first staging release,
+you can leave Redis disabled unless the application features you are testing
+require queues/reminders.
+
+Before pushing, check that secrets are ignored:
+
+  git status
+  git check-ignore apps/api/.env apps/web/.env
+
+If `.env` files are not ignored, update `.gitignore` before continuing. Never
+paste real secret values into this guide or into GitHub.
+
+
+PART 2 - CREATE AN AWS ACCOUNT AND BILLING ALERT
+------------------------------------------------
+
+1. Open https://aws.amazon.com/ and create/sign in to your AWS account.
+2. Choose one AWS Region and use it everywhere. For India, Mumbai is commonly
+   chosen: ap-south-1. The exact region is your choice.
+3. Open Billing and Cost Management > Budgets.
+4. Create a monthly cost budget with a small amount such as USD 5 or USD 10.
+5. Add email alerts at 50%, 80%, and 100% of the budget.
+6. Enable MFA on the root account and do not use the root account for daily work.
+
+
+PART 3 - CREATE THE AWS RDS POSTGRESQL DATABASE
+------------------------------------------------
+
+1. In AWS Console, open RDS > Databases > Create database.
+2. Select Standard create.
+3. Engine: PostgreSQL.
+4. Template: Free tier, if it is available for your account. If not available,
+   select the smallest development option and monitor billing carefully.
+5. DB instance identifier: omsons-crm-staging.
+6. Set a strong master username and password. Save them in a password manager.
+7. Initial database name: omsons_crm.
+8. Keep the default PostgreSQL port 5432.
+9. Connectivity:
+   - For the easiest beginner setup, choose public access temporarily.
+   - Create or choose a security group named omsons-crm-staging-db.
+   - Do not allow PostgreSQL from 0.0.0.0/0 permanently.
+10. Create the database and wait until its status is Available.
+11. Open the RDS database details and copy the Endpoint. Do not include `https://`.
+
+For an initial migration from your computer, add a temporary inbound rule to the
+RDS security group:
+
+  Type: PostgreSQL
+  Port: 5432
+  Source: My IP
+
+After migration, remove this rule or make the database private. For a safer
+long-term design, keep RDS private and run migrations from AWS CloudShell or a
+private migration job in the same VPC.
+
+
+PART 4 - BUILD THE DATABASE CONNECTION STRINGS
+-----------------------------------------------
+
+Replace the placeholders below. URL-encode special characters in the password
+(for example, `@` becomes `%40`).
+
+  DATABASE_URL=postgresql://DB_USER:ENCODED_PASSWORD@RDS_ENDPOINT:5432/omsons_crm?schema=public&connection_limit=5
+  DIRECT_URL=postgresql://DB_USER:ENCODED_PASSWORD@RDS_ENDPOINT:5432/omsons_crm?schema=public
+
+Use the same values for the API and for the migration command. Keep these values
+private. Do not put them in the frontend environment variables.
+
+
+PART 5 - MIGRATE THE DATABASE TO AWS RDS
+----------------------------------------
+
+Option A: migrate from your Windows computer
+
+1. Confirm your computer's public IP is allowed by the temporary RDS security
+   group rule from Part 3.
+2. In PowerShell, from the repository root, set the values for this session:
+
+  $env:DATABASE_URL="postgresql://DB_USER:ENCODED_PASSWORD@RDS_ENDPOINT:5432/omsons_crm?schema=public&connection_limit=5"
+  $env:DIRECT_URL="postgresql://DB_USER:ENCODED_PASSWORD@RDS_ENDPOINT:5432/omsons_crm?schema=public"
+
+3. Generate Prisma Client and apply all committed migrations:
+
+  npm run db:generate
+  npm --workspace apps/api exec prisma migrate deploy
+
+4. If the staging database should contain the repository's sample data, run:
+
+  npm run db:seed
+
+Only run the seed command if you understand what it inserts. Never seed a
+production database without checking the seed script first.
+
+5. Verify the migration completed successfully in the RDS database.
+6. Remove the temporary My IP rule if it is no longer needed.
+
+Do not run `prisma migrate dev` against the staging database. That command is
+for local development and may try to create development migrations.
+
+
+PART 6 - DEPLOY THE NESTJS API WITH AWS APP RUNNER
+--------------------------------------------------
+
+App Runner can deploy directly from GitHub and provides an AWS HTTPS staging
+URL. The repository's API is in a monorepo, so use these settings.
+
+1. Open AWS Console > App Runner > Create service.
+2. Source: Source code repository.
+3. Choose GitHub, connect your GitHub account, and authorize the repository.
+4. Select this repository and the staging branch, normally `main`.
+5. Deployment trigger: Automatic, so a new GitHub commit redeploys staging.
+6. Configure the service:
+
+   Runtime: Node.js 20 (or the newest version supported by the console)
+   Port: 4000
+   Start command: npm --workspace apps/api run start
+   Build command: npm install && npm --workspace apps/api run vercel-build
+
+   If App Runner asks for the source directory, leave it at the repository root
+   because the workspace package-lock.json is at the repository root.
+
+7. Set the service environment variables:
+
+   NODE_ENV=production
+   PORT=4000
+   DATABASE_URL=<RDS pooled/application connection string>
+   DIRECT_URL=<RDS direct connection string>
+   JWT_ACCESS_SECRET=<long random secret>
+   JWT_REFRESH_SECRET=<different long random secret>
+   JWT_ACCESS_EXPIRES_IN=15m
+   JWT_REFRESH_EXPIRES_IN=7d
+
+   Generate secrets locally if needed:
+
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+8. Create the service and wait for the deployment to finish.
+9. Copy the App Runner Default domain. It is the API staging URL.
+10. Test the API URL in a browser or PowerShell. The application exposes API
+    routes under `/api`; test a route that exists in this repository, for example:
+
+  Invoke-WebRequest "https://YOUR_API_DOMAIN/api/companies"
+
+If the API cannot connect to RDS, the RDS security group must allow traffic from
+the App Runner service. The simplest initial test is to allow PostgreSQL from
+the App Runner egress path only if AWS provides the required networking setup.
+For a stable private design, configure App Runner VPC networking and allow the
+RDS security group from the App Runner VPC connector/security group.
+
+
+PART 7 - OPTIONAL AMPLIFY DEPLOYMENT
+------------------------------------
+
+Skip this part if you are using the recommended EC2-only setup. It is retained
+only as an alternative for deploying the frontend separately.
+
+Amplify can connect to GitHub and automatically build this monorepo. It also
+provides the free AWS staging URL ending in `amplifyapp.com`.
+
+1. Open AWS Console > Amplify > Host web app.
+2. Choose GitHub and authorize AWS Amplify.
+3. Select the same repository and staging branch.
+4. Keep monorepo detection enabled if Amplify offers it.
+5. Use this build configuration if Amplify asks for one:
+
+   version: 1
+   applications:
+     - appRoot: apps/web
+       frontend:
+         phases:
+           preBuild:
+             commands:
+               - cd ../..
+               - npm ci
+           build:
+             commands:
+               - npm run build --workspace apps/web
+         artifacts:
+           baseDirectory: .next
+           files:
+             - '**/*'
+         cache:
+           paths:
+             - node_modules/**/*
+             - apps/web/node_modules/**/*
+             - apps/web/.next/cache/**/*
+
+   If Amplify does not accept `appRoot`, use the repository root as the app root
+   and use this build command instead:
+
+   npm ci && npm run build --workspace apps/web
+
+6. Add this Amplify environment variable before the first build:
+
+   NEXT_PUBLIC_API_URL=https://YOUR_API_DOMAIN/api
+
+   Replace YOUR_API_DOMAIN with the App Runner default domain, without a final
+   slash after `/api`.
+
+7. Save and deploy. Copy the Amplify default domain after the build succeeds.
+8. Open the Amplify URL and test login, companies, contacts, deals, and other
+   pages that use the API.
+
+The frontend reads NEXT_PUBLIC_API_URL at build time. If the API URL changes,
+update the Amplify variable and redeploy the frontend.
+
+
+PART 8 - UPDATE API CORS AFTER AMPLIFY DEPLOYS
+----------------------------------------------
+
+The API must allow the Amplify URL. In App Runner, add or update:
+
+  CORS_ORIGIN=https://YOUR_AMPLIFY_DOMAIN.amplifyapp.com
+
+If the application supports more than one frontend URL, check the API CORS
+implementation before using a comma-separated value. Then redeploy App Runner.
+
+Do not use `*` for CORS once authentication is enabled unless you understand
+the security consequences.
+
+
+PART 9 - OPTIONAL REDIS / BULLMQ
+--------------------------------
+
+This project includes BullMQ and Redis support. Redis is not provided by RDS.
+Do not point production code at localhost.
+
+If queues/reminders are required in staging, create a managed Redis-compatible
+service such as Amazon ElastiCache for Redis/Valkey, configure VPC networking,
+and add the required API environment variables:
+
+  REDIS_HOST=<private Redis endpoint>
+  REDIS_PORT=6379
+  REDIS_PASSWORD=<if required>
+
+ElastiCache networking is more advanced and may not be free. For a first UI/API
+staging test, leave Redis disabled if the API starts without it.
+
+
+PART 10 - NORMAL DAY-TO-DAY RELEASE PROCESS
+--------------------------------------------
+
+1. Make a change locally.
+2. Run tests/build locally:
+
+   npm run build
+   npm run typecheck
+
+3. Commit and push to the connected GitHub staging branch:
+
+   git add .
+   git commit -m "describe the change"
+   git push origin main
+
+4. Amplify rebuilds the frontend and App Runner rebuilds the API.
+5. If a schema changed and a new migration was committed, run this migration
+   against the AWS database before testing the new code:
+
+   $env:DATABASE_URL="<AWS DATABASE_URL>"
+   $env:DIRECT_URL="<AWS DIRECT_URL>"
+   npm --workspace apps/api exec prisma migrate deploy
+
+For stronger automation later, run `prisma migrate deploy` from a protected CI
+job before or during API deployment. Do not put database passwords in GitHub
+Actions source files; use GitHub encrypted secrets or AWS Secrets Manager.
+
+
+PART 11 - TROUBLESHOOTING CHECKLIST
+-----------------------------------
+
+Amplify build fails:
+  - Confirm the build is using the repository root package-lock.json.
+  - Confirm `npm ci` runs at the repository root.
+  - Confirm `npm run build --workspace apps/web` succeeds locally.
+  - Check the Amplify build logs for the exact failing command.
+
+App Runner build fails:
+  - Confirm Node.js 20 or newer is selected.
+  - Confirm port is 4000.
+  - Confirm the start command is `npm --workspace apps/api run start`.
+  - Confirm the build command generated `apps/api/dist`.
+  - Check App Runner deployment and application logs.
+
+API returns database errors:
+  - Confirm DATABASE_URL and DIRECT_URL are correct and URL-encoded.
+  - Confirm all Prisma migrations have been deployed.
+  - Confirm RDS is Available and the security group permits the API connection.
+  - Confirm the RDS endpoint is used, not localhost.
+
+Browser shows CORS errors:
+  - Set CORS_ORIGIN to the exact Amplify HTTPS URL.
+  - Redeploy the App Runner API after changing it.
+  - Confirm NEXT_PUBLIC_API_URL ends in `/api` and points to App Runner.
+
+Frontend still calls localhost:
+  - Set NEXT_PUBLIC_API_URL in Amplify, not only on your computer.
+  - Trigger a new Amplify build because NEXT_PUBLIC variables are build-time
+    values.
+
+
+PART 12 - STOP STAGING RESOURCES WHEN NOT NEEDED
+------------------------------------------------
+
+To avoid unexpected costs, stop/delete staging resources when the project is not
+being tested. Before deleting RDS, create a final snapshot if the data matters.
+App Runner and Amplify can also have build, storage, and network charges. Keep
+the budget alerts enabled and review Billing > Cost Explorer regularly.
+
+
+FINAL DEPLOYMENT VALUES TO RECORD SAFELY
+----------------------------------------
+
+  GitHub repository: ______________________________
+  GitHub branch: _________________________________
+  AWS Region: ____________________________________
+  Amplify frontend URL: ___________________________
+  App Runner API URL: _____________________________
+  RDS endpoint: __________________________________
+  Database name: omsons_crm
+  Database migration status: ______________________
+
+Never record DATABASE_URL, DIRECT_URL, JWT secrets, or database passwords in a
+public README, GitHub issue, screenshot, or this text file.
+
+
+PART 13 - PRIMARY EC2-ONLY DEPLOYMENT (FRONTEND + API)
+-----------------------------------------------------
+
+The message "AWS App Runner is not available to your project" means the AWS
+account has not activated that service or the account/Region requires an
+upgrade. This is an AWS account restriction; changing the application code will
+not fix it. You can request activation using the Learn more link in the AWS
+message, or use the EC2 deployment below.
+
+EC2 architecture:
+
+  EC2      = Next.js frontend + NestJS API + Nginx
+  RDS      = PostgreSQL database
+
+1. Open EC2 > Launch instance.
+2. Choose Ubuntu Server 24.04 LTS (or the current supported Ubuntu LTS).
+3. Choose an instance covered by your account's Free Tier, if available.
+4. Create/download a key pair, for example `omsons-staging.pem`.
+5. Create a security group allowing:
+
+   SSH 22       - My IP only
+   HTTP 80       - 0.0.0.0/0
+   HTTPS 443     - 0.0.0.0/0
+
+   Do not expose PostgreSQL 5432 or the API port 4000 publicly. Nginx will
+   receive web traffic and proxy it to the API on localhost.
+
+6. Connect from PowerShell. Replace the path and public IP:
+
+   ssh -i "C:\path\omsons-staging.pem" ubuntu@EC2_PUBLIC_IP
+
+7. Install Docker and Git on the EC2 server:
+
+   sudo apt update
+   sudo apt install -y docker.io docker-compose-plugin git
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker ubuntu
+   exit
+
+   Connect again so the Docker group permission takes effect.
+
+8. Clone the GitHub repository on EC2:
+
+   git clone https://github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY.git omsons-crm
+   cd omsons-crm
+
+   For a private repository, use a GitHub deploy key or GitHub Actions. Do not
+   put a GitHub password or personal access token directly in shell history.
+
+9. Add production Docker deployment files to the repository and commit them to
+   GitHub. Use a `Dockerfile.web`, a `Dockerfile.api`, and
+   `docker-compose.aws.yml`. The web image must build and start Next.js on port
+   3000. The API image must run Prisma generate, build `apps/api`, and start
+   `node apps/api/dist/main.js` on port 4000. Do not copy the development
+   `docker-compose.yml` directly to production.
+
+   - install dependencies from the repository root
+   - run `prisma generate`
+   - build `apps/api`
+   - start `node apps/api/dist/main.js`
+   - receive PORT, DATABASE_URL, DIRECT_URL, JWT secrets, and CORS_ORIGIN
+
+10. Create an environment file outside the repository on EC2, containing the
+    RDS URLs, JWT secrets, PORT=4000, CORS_ORIGIN, and
+    NEXT_PUBLIC_API_URL. Protect it with `chmod 600` and never commit it.
+
+11. Start both containers with `docker compose --env-file .env -f
+    docker-compose.aws.yml up -d --build`. Configure Nginx to proxy `/` to
+    `http://127.0.0.1:3000` and `/api/` to `http://127.0.0.1:4000/api/`.
+    Keep ports 3000 and 4000 private in the EC2 security group.
+
+12. Set the web container's build-time API URL to:
+
+   NEXT_PUBLIC_API_URL=http://EC2_PUBLIC_IP/api
+
+   For real browser use, point a domain to the EC2 Elastic IP and use HTTPS.
+
+13. To migrate the AWS database from the API container, run:
+
+   `docker compose --env-file .env -f docker-compose.aws.yml run --rm api npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`
+
+14. To update both applications manually on EC2:
+
+   cd ~/omsons-crm
+   git pull origin main
+   docker compose --env-file .env -f docker-compose.aws.yml up -d --build
+
+For automatic GitHub deployment, add a GitHub Actions workflow that connects to
+EC2 over SSH and runs these commands. Store the SSH private key as a GitHub
+Actions secret; never commit it to the repository.
+
+EC2 gives you terminal access and full control, but you are responsible for
+updates, backups, firewall rules, HTTPS, logs, and server security. GitHub
+Actions can automate the update command later by connecting to EC2 over SSH.
+Store the SSH private key as a GitHub Actions secret; never commit it.
