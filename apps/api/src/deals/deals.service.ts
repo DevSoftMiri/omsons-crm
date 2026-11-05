@@ -12,6 +12,7 @@ export class DealsService {
   list(query: Record<string, string>) {
     const cacheKey = JSON.stringify({
       pipeline: query.pipeline ?? "",
+      companyId: query.companyId ?? "",
       stage: query.stage ?? "",
       ownerId: query.ownerId ?? "",
       search: query.search?.trim() ?? "",
@@ -40,6 +41,7 @@ export class DealsService {
     return this.prisma.deal.findMany({
       where: {
         pipeline: query.pipeline || undefined,
+        companyId: query.companyId || undefined,
         stage: query.stage || undefined,
         ownerId: query.ownerId || undefined,
         OR: search ? [{ name: { contains: search, mode: "insensitive" } }, { company: { name: { contains: search, mode: "insensitive" } } }] : undefined
@@ -63,6 +65,8 @@ export class DealsService {
 
   async create(body: Record<string, unknown>) {
     if (typeof body.name !== "string" || !body.name.trim()) throw new BadRequestException("Deal name is required");
+    if (typeof body.companyId !== "string" || !body.companyId.trim()) throw new BadRequestException("Company is required");
+    await this.validateCompany(body.companyId);
     const result = await this.prisma.deal.create({ data: await this.data(body) as any, include: { owner: true, contact: true, company: true } });
     this.invalidateCache();
     return result;
@@ -70,6 +74,10 @@ export class DealsService {
 
   async update(id: string, body: Record<string, unknown>) {
     if (!(await this.prisma.deal.findUnique({ where: { id } }))) throw new NotFoundException("Deal not found");
+    if (body.companyId !== undefined) {
+      if (typeof body.companyId !== "string" || !body.companyId.trim()) throw new BadRequestException("Company is required");
+      await this.validateCompany(body.companyId);
+    }
     const result = await this.prisma.deal.update({ where: { id }, data: await this.data(body, true) as any, include: { owner: true, contact: true, company: true } });
     this.invalidateCache();
     return result;
@@ -79,6 +87,11 @@ export class DealsService {
     const result = await this.prisma.deal.delete({ where: { id } });
     this.invalidateCache();
     return result;
+  }
+
+  private async validateCompany(companyId: string) {
+    const company = await this.prisma.company.findFirst({ where: { id: companyId.trim(), isArchived: false }, select: { id: true } });
+    if (!company) throw new BadRequestException("Selected company was not found or is archived");
   }
 
   private async data(body: Record<string, unknown>, partial = false) {

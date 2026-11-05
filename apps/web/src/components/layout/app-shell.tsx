@@ -223,7 +223,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="p-2 lg:p-3">{children}</main>
+        <main className="min-h-screen overflow-visible p-2 lg:p-3">{children}</main>
       </div>
     </div>
   );

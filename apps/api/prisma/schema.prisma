@@ -124,6 +124,7 @@ model Company {
   meetings                   Meeting[]
   notes                      Note[]
   followUps                  FollowUp[]
+  tasks                      Task[]
 
   @@index([name])
   @@index([city, state])
@@ -372,17 +373,24 @@ model Task {
   id         String    @id @default(cuid())
   title      String
   dueAt      DateTime?
-  priority   Priority  @default(MEDIUM)
+  reminderAt DateTime?
+  taskType   String    @default("TODO")
+  priority   Priority?
+  queue      String?
+  notes      String?
   doneAt     DateTime?
   leadId     String?
+  companyId  String?
   assigneeId String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   assignee   User?     @relation(fields: [assigneeId], references: [id])
   lead       Lead?     @relation(fields: [leadId], references: [id])
+  company    Company?  @relation(fields: [companyId], references: [id])
 
   @@index([dueAt])
   @@index([doneAt])
+  @@index([companyId, doneAt, dueAt])
 }
 
 model FollowUp {

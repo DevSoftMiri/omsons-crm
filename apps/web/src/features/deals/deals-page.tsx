@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
 import { sortRecords } from "@/components/ui/sort-records";
 
@@ -59,6 +60,8 @@ type PipelineStage = {
   probability?: number | null;
 };
 type Pipeline = { id: string; name: string; stages: PipelineStage[] };
+type CompanyOption = { id: string; name: string; isArchived?: boolean; ownerName?: string | null; owner?: { id: string; name: string } | null; industry?: string | null; city?: string | null; state?: string | null };
+type ContactOption = { id: string; firstName: string; lastName?: string | null; email?: string | null; companyId?: string | null };
 type CatalogVariant = {
   id: string;
   sku: string;
@@ -106,6 +109,8 @@ const dealSortOptions = [
 ];
 
 export function DealsPage() {
+  const searchParams = useSearchParams();
+  const companyId = searchParams.get("companyId") ?? "";
   const [viewMode, setViewMode] = useState<"board" | "table">("board");
   const [addOpen, setAddOpen] = useState(false);
   const [activeProperty, setActiveProperty] = useState<string | null>(null);
@@ -113,6 +118,11 @@ export function DealsPage() {
   const [dealCount, setDealCount] = useState(0);
   const [dealName, setDealName] = useState("");
   const [dealAmount, setDealAmount] = useState("");
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedContactId, setSelectedContactId] = useState("");
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [companiesError, setCompaniesError] = useState("");
   const [deals, setDeals] = useState<Deal[]>([]);
   const [dealsLoading, setDealsLoading] = useState(true);
   const [dealsRefreshing, setDealsRefreshing] = useState(false);
@@ -132,11 +142,27 @@ export function DealsPage() {
   const selectedPipeline = (Array.isArray(pipelines) ? pipelines : []).find(
     (item) => item.id === selectedPipelineId,
   );
+  useEffect(() => {
+    setCompaniesLoading(true);
+    void fetch(`${API_URL}/companies?limit=100`)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error("Unable to load companies");
+        return payload;
+      })
+      .then((payload: unknown) => {
+        const records = Array.isArray(payload) ? payload : (payload as { data?: unknown })?.data;
+        setCompanies(Array.isArray(records) ? (records as CompanyOption[]).filter((company) => !company.isArchived) : []);
+        setCompaniesError("");
+      })
+      .catch((loadError) => setCompaniesError(loadError instanceof Error ? loadError.message : "Unable to load companies"))
+      .finally(() => setCompaniesLoading(false));
+  }, []);
   const loadDeals = useCallback(async (pipelineName?: string, signal?: AbortSignal) => {
     if (deals.length) setDealsRefreshing(true); else setDealsLoading(true);
     try {
       const response = await fetch(
-        `${API_URL}/deals${pipelineName ? `?pipeline=${encodeURIComponent(pipelineName)}` : ""}`,
+        `${API_URL}/deals?${new URLSearchParams({ ...(pipelineName ? { pipeline: pipelineName } : {}), ...(companyId ? { companyId } : {}) }).toString()}`,
         { signal },
       );
       if (!response.ok) return;
@@ -154,7 +180,7 @@ export function DealsPage() {
     } finally {
       if (!signal?.aborted) { setDealsLoading(false); setDealsRefreshing(false); }
     }
-  }, [deals.length]);
+  }, [companyId, deals.length]);
 
   useEffect(() => {
     void fetch(`${API_URL}/pipelines`)
@@ -440,12 +466,19 @@ export function DealsPage() {
           setDealName={setDealName}
           dealAmount={dealAmount}
           setDealAmount={setDealAmount}
+          companies={companies}
+          companiesLoading={companiesLoading}
+          companiesError={companiesError}
+          selectedCompanyId={selectedCompanyId}
+          setSelectedCompanyId={setSelectedCompanyId}
+          selectedContactId={selectedContactId}
+          setSelectedContactId={setSelectedContactId}
           pipeline={selectedPipeline}
           onCancel={() => {
             setCreateError("");
             setCreateOpen(false);
           }}
-          onCreate={async (lineItems, pipelineId, stageId) => {
+          onCreate={async (lineItems, pipelineId, stageId, companyId, createAnother = false) => {
             if (!dealName.trim()) return;
             try {
               const lineItemsTotal = lineItems.reduce(
@@ -466,6 +499,8 @@ export function DealsPage() {
                   lineItems,
                   pipelineId,
                   stageId,
+                  companyId,
+                  contactId: selectedContactId || null,
                 }),
               });
               if (!response.ok) {
@@ -477,8 +512,10 @@ export function DealsPage() {
               // as soon as the first deal is successfully created.
               setDeals((currentDeals) => [createdDeal, ...currentDeals]);
               setDealCount((count) => count + 1);
-              setCreateOpen(false);
               setDealName("");
+              setDealAmount("");
+              setSelectedContactId("");
+              if (!createAnother) setCreateOpen(false);
             } catch (error) {
               setCreateError(
                 error instanceof Error
@@ -511,6 +548,13 @@ function CreateDealModal({
   setDealName,
   dealAmount,
   setDealAmount,
+  companies,
+  companiesLoading,
+  companiesError,
+  selectedCompanyId,
+  setSelectedCompanyId,
+  selectedContactId,
+  setSelectedContactId,
   pipeline,
   onCancel,
   onCreate,
@@ -520,11 +564,20 @@ function CreateDealModal({
   setDealName: (value: string) => void;
   dealAmount: string;
   setDealAmount: (value: string) => void;
+  companies: CompanyOption[];
+  companiesLoading: boolean;
+  companiesError: string;
+  selectedCompanyId: string;
+  setSelectedCompanyId: (value: string) => void;
+  selectedContactId: string;
+  setSelectedContactId: (value: string) => void;
   onCancel: () => void;
   onCreate: (
     lineItems: DealLineItem[],
     pipelineId: string,
     stageId: string,
+    companyId: string,
+    createAnother?: boolean,
   ) => Promise<void> | void;
   error?: string;
   pipeline?: Pipeline;
@@ -542,10 +595,37 @@ function CreateDealModal({
   const [lineItemError, setLineItemError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [stageId, setStageId] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [companyError, setCompanyError] = useState("");
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactsLoading, setContactsLoading] = useState(false);
   const lineItemRef = useRef<HTMLDivElement>(null);
+  const companyRef = useRef<HTMLDivElement>(null);
+  const contactRef = useRef<HTMLDivElement>(null);
   const availableStages = Array.isArray(pipeline?.stages)
     ? pipeline.stages
     : [];
+  useEffect(() => {
+    if (!selectedCompanyId) {
+      setContacts([]);
+      setContactSearch("");
+      setContactOpen(false);
+      setSelectedContactId("");
+      return;
+    }
+    setContactsLoading(true);
+    void fetch(`${API_URL}/contacts?companyId=${encodeURIComponent(selectedCompanyId)}`)
+      .then((response) => response.json())
+      .then((payload: unknown) => {
+        const records = Array.isArray(payload) ? payload : (payload as { data?: unknown })?.data;
+        setContacts(Array.isArray(records) ? records as ContactOption[] : []);
+      })
+      .catch(() => setContacts([]))
+      .finally(() => setContactsLoading(false));
+  }, [selectedCompanyId, setSelectedContactId]);
   useEffect(() => {
     if (
       availableStages[0] &&
@@ -564,9 +644,16 @@ function CreateDealModal({
   }, []);
   useEffect(() => {
     const close = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (companyRef.current && !companyRef.current.contains(target)) {
+        setCompanyOpen(false);
+      }
+      if (contactRef.current && !contactRef.current.contains(target)) {
+        setContactOpen(false);
+      }
       if (
         lineItemRef.current &&
-        !lineItemRef.current.contains(event.target as Node)
+        !lineItemRef.current.contains(target)
       ) {
         setSuggestionsOpen(false);
       }
@@ -590,6 +677,17 @@ function CreateDealModal({
     Number(selectedVariant?.variant.priceLabel ?? 0);
   const parsedQuantity = Number(quantity);
   const lineTotal = unitPrice * parsedQuantity;
+  const selectedCompany = companies.find((company) => company.id === selectedCompanyId);
+  const selectedCompanyOwner = selectedCompany?.owner?.name || selectedCompany?.ownerName || "No owner assigned";
+  const companyMatches = companies.filter((company) => {
+    const searchText = [company.name, company.owner?.name, company.ownerName, company.industry, company.city, company.state].filter(Boolean).join(" ").toLowerCase();
+    return searchText.includes(companySearch.trim().toLowerCase());
+  });
+  const contactMatches = contacts.filter((contact) =>
+    `${contact.firstName} ${contact.lastName ?? ""} ${contact.email ?? ""}`.toLowerCase().includes(contactSearch.trim().toLowerCase()),
+  );
+  const selectedContact = contacts.find((contact) => contact.id === selectedContactId);
+  const contactLabel = selectedContact ? `${selectedContact.firstName} ${selectedContact.lastName ?? ""}`.trim() : "";
   const addLineItem = () => {
     if (
       !selectedVariant ||
@@ -631,27 +729,28 @@ function CreateDealModal({
     "h-10 w-full rounded-lg border border-[#b8c5d1] bg-white px-3 text-sm outline-none focus:border-[#005c5f]";
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-50 flex h-dvh items-center justify-center overflow-hidden bg-black/30 p-2 sm:p-4"
       onMouseDown={onCancel}
       role="dialog"
       aria-modal="true"
     >
       <form
-        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={async (event) => {
           event.preventDefault();
           if (submitting) return;
           setSubmitting(true);
           if (!pipeline?.id || !stageId) return;
+          if (!selectedCompanyId) { setCompanyError("Please select a company before creating the deal."); setSubmitting(false); return; }
           try {
-            await onCreate(lineItems, pipeline.id, stageId);
+            await onCreate(lineItems, pipeline.id, stageId, selectedCompanyId, false);
           } finally {
             setSubmitting(false);
           }
         }}
       >
-        <div className="flex items-center justify-between border-b border-[#e1e7ed] px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#e1e7ed] px-4 py-3 sm:px-6 sm:py-4">
           <h2 className="text-xl font-semibold">Create Deal</h2>
           <div className="flex items-center gap-4">
             <button
@@ -662,9 +761,10 @@ function CreateDealModal({
               {editing ? "Done editing" : "Edit form"}
             </button>
             <button
-              className="text-2xl text-[#516f90]"
+              className="rounded-md px-2 text-2xl leading-none text-[#516f90] hover:bg-[#f1f5f9]"
               onClick={onCancel}
               type="button"
+              aria-label="Close create deal form"
             >
               ×
             </button>
@@ -681,7 +781,8 @@ function CreateDealModal({
             {error}
           </div>
         ) : null}
-        <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           {field(
             "Deal name",
             <input
@@ -691,6 +792,12 @@ function CreateDealModal({
               onChange={(event) => setDealName(event.target.value)}
             />,
           )}
+          <div ref={companyRef} className="relative min-w-0 sm:col-span-2">
+            {field("Company", <input className={input} placeholder={companiesLoading ? "Loading companies..." : "Search companies"} value={companySearch || selectedCompany?.name || ""} onFocus={() => setCompanyOpen(true)} onChange={(event) => { setCompanySearch(event.target.value); setCompanyOpen(true); setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanyError(""); }} />)}
+            {selectedCompanyId ? <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#516f90]"><span>Owner: <strong className="text-[#213343]">{selectedCompanyOwner}</strong></span><button className="font-semibold text-[#b42318] hover:underline" type="button" onClick={() => { setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanySearch(""); setCompanyOpen(false); setCompanyError(""); }}>Clear company</button></div> : null}
+            {companyOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">{companyMatches.map((company) => { const owner = company.owner?.name || company.ownerName || "No owner assigned"; const context = [company.industry, [company.city, company.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "); return <button className="flex w-full min-w-0 items-center gap-1.5 rounded px-3 py-2 text-left text-xs hover:bg-[#f7f9fb]" type="button" key={company.id} onClick={() => { setSelectedCompanyId(company.id); setCompanySearch(company.name); setCompanyOpen(false); setCompanyError(""); }}><span className="min-w-0 truncate font-semibold text-[#213343]">{company.name}</span><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#516f90]">Owner: {owner}</span>{context ? <><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#8293a6]">{context}</span></> : null}</button>; })}{!companyMatches.length && !companiesLoading ? <p className="px-3 py-2 text-sm text-[#b42318]">{companiesError || "No companies found"}</p> : null}</div> : null}
+            {companyError ? <p className="mt-1 text-xs text-red-700">{companyError}</p> : null}
+          </div>
           {field(
             "Pipeline",
             <select className={input} value={pipeline?.id ?? ""} disabled>
@@ -748,28 +855,17 @@ function CreateDealModal({
               <option>Low</option>
             </select>,
           )}
-          <div className="sm:col-span-2">
-            <h3 className="mb-3 border-b border-[#e1e7ed] pb-2 text-sm font-bold">
-              Associate Deal with
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {field(
-                "Contact",
-                <input className={input} placeholder="Search" />,
-              )}
-              {field(
-                "Company",
-                <input className={input} placeholder="Search" />,
-              )}
-            </div>
+          <div ref={contactRef} className="relative min-w-0">
+            {field("Contact", <input className={input} placeholder={contactsLoading ? "Loading contacts..." : "Search contacts"} value={contactSearch || contactLabel} disabled={!selectedCompanyId} onFocus={() => setContactOpen(true)} onChange={(event) => { setContactSearch(event.target.value); setContactOpen(true); setSelectedContactId(""); }} />)}
+            {selectedCompanyId && contactOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">{contactMatches.map((contact) => <button className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]" type="button" key={contact.id} onClick={() => { setSelectedContactId(contact.id); setContactSearch(`${contact.firstName} ${contact.lastName ?? ""}`.trim()); setContactOpen(false); }}><span className="block font-semibold text-[#213343]">{`${contact.firstName} ${contact.lastName ?? ""}`.trim()}</span>{contact.email ? <span className="block text-xs text-[#718096]">{contact.email}</span> : null}</button>)}{!contactMatches.length && !contactsLoading ? <p className="px-3 py-2 text-sm text-[#718096]">No contacts for this company</p> : null}</div> : null}
           </div>
-          <div className="sm:col-span-2">
+          <div className="min-w-0 sm:col-span-2">
             <h3 className="mb-3 text-sm font-bold">Add line item</h3>
             <div
-              className="grid gap-3 sm:grid-cols-[1fr_120px_auto]"
+              className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
               ref={lineItemRef}
             >
-              <div className="relative">
+              <div className="relative min-w-0">
                 <input
                   className={input}
                   placeholder="Search product or SKU"
@@ -892,8 +988,9 @@ function CreateDealModal({
               </p>
             ) : null}
           </div>
+          </div>
         </div>
-        <div className="flex justify-end gap-3 border-t border-[#e1e7ed] px-6 py-4">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#e1e7ed] bg-white px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
           <button
             className="rounded-full px-5 py-2.5 text-sm font-semibold"
             onClick={onCancel}
@@ -915,7 +1012,8 @@ function CreateDealModal({
               if (submitting || !pipeline?.id || !stageId) return;
               setSubmitting(true);
               try {
-                await onCreate(lineItems, pipeline.id, stageId);
+                if (!selectedCompanyId) { setCompanyError("Please select a company before creating the deal."); return; }
+                await onCreate(lineItems, pipeline.id, stageId, selectedCompanyId, true);
               } finally {
                 setSubmitting(false);
               }
@@ -1067,6 +1165,7 @@ function DealsBoard({
                     }}
                   >
                     <DealCard
+                      companyName={deal.company?.name ?? "--"}
                       name={deal.name}
                       amount={deal.amount}
                       onCreateTask={onCreateTask}
@@ -1553,12 +1652,14 @@ function DealFieldTooltip({
 }
 
 function DealCard({
+  companyName,
   name,
   amount,
   onDragStart,
   onCreateTask,
   onCreateNote,
 }: {
+  companyName: string;
   name: string;
   amount?: number | null;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
@@ -1572,7 +1673,8 @@ function DealCard({
       draggable
       onDragStart={onDragStart}
     >
-      <h3 className="text-sm font-bold text-[#006b70]">{name}</h3>
+      <h3 className="truncate text-sm font-bold text-[#006b70]" title={companyName}>{companyName}</h3>
+      <p className="mt-1 truncate text-sm font-semibold text-[#213343]" title={name}>{name}</p>
       <DealFieldTooltip label="Create Date: 10/16/2026 10:09 AM GMT+5:30">
         <p className="mt-3 flex items-center gap-2">
           <CalendarDays className="h-4 w-4" aria-hidden="true" />
@@ -2025,6 +2127,7 @@ function DealsTableEmpty({ deals }: { deals: Deal[] }) {
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-[#dbe4ed] bg-[#f7f9fb]">
             <tr>
+              <th className="px-4 py-3">Company</th>
               <th className="px-4 py-3">Deal name</th>
               <th className="px-4 py-3">Deal stage</th>
               <th className="px-4 py-3">Amount</th>
@@ -2035,6 +2138,9 @@ function DealsTableEmpty({ deals }: { deals: Deal[] }) {
           <tbody>
             {deals.map((deal) => (
               <tr className="border-b border-[#e7edf3]" key={deal.id}>
+                <td className="px-4 py-3 font-semibold text-[#213343]">
+                  {deal.company?.name ?? "--"}
+                </td>
                 <td className="px-4 py-3 font-bold text-[#007a8a]">
                   {deal.name}
                 </td>

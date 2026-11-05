@@ -62,7 +62,7 @@ export class CompaniesService {
     if (parent.parentCompanyId) throw new BadRequestException("Sub-companies cannot have their own sub-companies");
   }
 
-  private include = { owner: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { include: { owner: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } }, deals: { select: { id: true, name: true, amount: true, stage: true, closeDate: true, contactId: true }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
+  private include = { owner: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { include: { owner: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } }, deals: { select: { id: true, name: true, amount: true, stage: true, pipeline: true, priority: true, closeDate: true, contactId: true, company: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
 
   async list(query: Record<string, string | undefined>) {
     const page = Math.max(1, Number(query.page) || 1); const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
