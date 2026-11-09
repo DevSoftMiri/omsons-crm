@@ -5,5 +5,10 @@ export function createIdempotencyKey() {
 }
 
 export function createHeaders(key: string) {
-  return { "Content-Type": "application/json", "Idempotency-Key": key };
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("accessToken") : null;
+  return {
+    "Content-Type": "application/json",
+    "Idempotency-Key": key,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }

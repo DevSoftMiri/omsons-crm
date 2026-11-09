@@ -1,7 +1,7 @@
-﻿"use client";
+﻿'use client';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from '@/components/layout/app-shell';
 import {
   BoardView,
   CollectionPageHeader,
@@ -9,11 +9,11 @@ import {
   CrmPageFrame,
   IconButton,
   SortableBoardView,
-} from "@/components/ui/crm-page-template";
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getCountries, getCountryCallingCode } from "libphonenumber-js/max";
-import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
+} from '@/components/ui/crm-page-template';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getCountries, getCountryCallingCode } from 'libphonenumber-js/max';
+import { createHeaders, createIdempotencyKey } from '@/lib/idempotency';
 import {
   CalendarDays,
   ChevronDown,
@@ -33,113 +33,230 @@ import {
   ArrowUp,
   StickyNote,
   UsersRound,
-} from "lucide-react";
-import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
-import { sortRecords } from "@/components/ui/sort-records";
+} from 'lucide-react';
+import { SortMenu, type SortDirection } from '@/components/ui/sort-menu';
+import { sortRecords } from '@/components/ui/sort-records';
 
-const contacts: Array<{ id: string; initials: string; name: string; email: string }> = [];
+type ContactRecord = {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  leadStatus?: string | null;
+  contactSource?: string | null;
+  lifecycleStage?: string | null;
+  createdAt?: string | null;
+  title?: string | null;
+  department?: string | null;
+  roleInPurchase?: string | null;
+  owner?: { name?: string | null } | null;
+  company?: { name?: string | null } | null;
+};
 const contactSortOptions = [
-  { value: "firstName", label: "First name" },
-  { value: "lastName", label: "Last name" },
-  { value: "createdAt", label: "Create date" },
-  { value: "lastActivityAt", label: "Last activity date" },
-  { value: "lastContactedAt", label: "Last contacted date" },
-  { value: "nextFollowUpAt", label: "Next follow-up date" },
-  { value: "owner", label: "Contact owner" },
-  { value: "leadStatus", label: "Lead status" },
-  { value: "lifecycleStage", label: "Lifecycle stage" },
-  { value: "title", label: "Job title" },
-  { value: "company", label: "Company name" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone number" },
-  { value: "region", label: "Region" },
-  { value: "contactSource", label: "Contact source" },
+  { value: 'firstName', label: 'First name' },
+  { value: 'lastName', label: 'Last name' },
+  { value: 'createdAt', label: 'Create date' },
+  { value: 'department', label: 'Department' },
+  { value: 'roleInPurchase', label: 'Role in purchase' },
+  { value: 'company', label: 'Company' },
+  { value: 'owner', label: 'Contact owner' },
+  { value: 'leadStatus', label: 'Lead status' },
+  { value: 'lifecycleStage', label: 'Lifecycle stage' },
+  { value: 'title', label: 'Job title' },
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Phone number' },
+  { value: 'contactSource', label: 'Contact source' },
 ];
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 const phoneCountries = getCountries()
   .map((short) => ({
-    short: short === "GB" ? "UK" : short,
-    name: new Intl.DisplayNames(["en"], { type: "region" }).of(short) ?? short,
+    short: short === 'GB' ? 'UK' : short,
+    name: new Intl.DisplayNames(['en'], { type: 'region' }).of(short) ?? short,
     code: `+${getCountryCallingCode(short)}`,
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
 const departmentOptions = [
-  "Management",
-  "Purchase",
-  "Production",
-  "Quality",
-  "Engineering",
-  "Stores",
-  "Sales",
-  "Accounts",
-  "Administration",
-  "Laboratory / R&D",
-  "General",
+  'Management',
+  'Purchase',
+  'Production',
+  'Quality',
+  'Engineering',
+  'Stores',
+  'Sales',
+  'Accounts',
+  'Administration',
+  'Laboratory / R&D',
+  'General',
 ];
 const purchaseRoleOptions = [
-  ["Decision Maker", "bg-violet-100 text-violet-700"],
-  ["Purchase Contact", "bg-blue-100 text-blue-700"],
-  ["Technical Evaluator", "bg-cyan-100 text-cyan-700"],
-  ["End User", "bg-emerald-100 text-emerald-700"],
-  ["Accounts Contact", "bg-amber-100 text-amber-700"],
-  ["Primary Contact / Person In-charge", "bg-rose-100 text-rose-700"],
+  ['Decision Maker', 'bg-violet-100 text-violet-700'],
+  ['Purchase Contact', 'bg-blue-100 text-blue-700'],
+  ['Technical Evaluator', 'bg-cyan-100 text-cyan-700'],
+  ['End User', 'bg-emerald-100 text-emerald-700'],
+  ['Accounts Contact', 'bg-amber-100 text-amber-700'],
+  ['Primary Contact / Person In-charge', 'bg-rose-100 text-rose-700'],
 ] as const;
 
 function getPurchaseRoleColor(role: string) {
   return (
     purchaseRoleOptions.find(([option]) => option === role)?.[1] ??
-    "bg-slate-100 text-slate-700"
+    'bg-slate-100 text-slate-700'
   );
 }
 
 export function ContactsPage() {
-  const [activeSegment, setActiveSegment] = useState("All contacts");
-  const [viewMode, setViewMode] = useState<"board" | "table">("board");
+  const [contacts, setContacts] = useState<ContactRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeSegment, setActiveSegment] = useState('All contacts');
+  const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [addStage, setAddStage] = useState("");
-  const [sortBy, setSortBy] = useState("firstName");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [addStage, setAddStage] = useState('');
+  const [sortBy, setSortBy] = useState('firstName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [search, setSearch] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingContact, setEditingContact] = useState<ContactRecord | null>(
+    null,
+  );
+  const [actionError, setActionError] = useState('');
+  const [actionContactId, setActionContactId] = useState<string | null>(null);
+  const loadContacts = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/contacts`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error('Unable to load contacts');
+      const value = payload as {
+        data?: ContactRecord[];
+        value?: ContactRecord[];
+      } | null;
+      setContacts(
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(value?.data)
+            ? value.data
+            : Array.isArray(value?.value)
+              ? value.value
+              : [],
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to load contacts',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void loadContacts();
+  }, [loadContacts]);
+  const deleteContact = async (contact: ContactRecord) => {
+    const name = `${contact.firstName} ${contact.lastName ?? ''}`.trim();
+    if (!window.confirm(`Delete ${name}? This action cannot be undone.`)) return;
+    setActionContactId(contact.id);
+    setActionError('');
+    try {
+      const response = await fetch(`${API_URL}/contacts/${contact.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Unable to delete contact');
+      setContacts((current) => current.filter((item) => item.id !== contact.id));
+      setOpenMenuId(null);
+    } catch (caught) {
+      setActionError(
+        caught instanceof Error ? caught.message : 'Unable to delete contact',
+      );
+    } finally {
+      setActionContactId(null);
+    }
+  };
+  const updateContact = async (
+    contact: ContactRecord,
+    values: ContactEditValues,
+  ) => {
+    setActionContactId(contact.id);
+    setActionError('');
+    try {
+      const response = await fetch(`${API_URL}/contacts/${contact.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      if (!response.ok) throw new Error('Unable to update contact');
+      const updated = (await response.json()) as ContactRecord;
+      setContacts((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setEditingContact(null);
+    } catch (caught) {
+      setActionError(
+        caught instanceof Error ? caught.message : 'Unable to update contact',
+      );
+    } finally {
+      setActionContactId(null);
+    }
+  };
+  const titleRow = (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-2">
+      <h1 className="text-2xl font-bold text-[#213343]">Contacts</h1>
+      <button
+        className="inline-flex items-center gap-2 rounded-md bg-[#ff5c35] px-4 py-2 text-sm font-semibold text-white"
+        onClick={() => setAddStage('lead')}
+        type="button"
+      >
+        <Plus className="h-4 w-4" />
+        Create contact
+      </button>
+    </div>
+  );
+  const visibleContacts = contacts.filter((contact) =>
+    `${contact.firstName} ${contact.lastName ?? ''} ${contact.email ?? ''}`
+      .toLowerCase()
+      .includes(search.trim().toLowerCase()),
+  );
   const sortedContacts = sortRecords(
-    contacts,
+    visibleContacts,
     sortBy,
     sortDirection,
     (contact, key) =>
-      key === "firstName"
-        ? contact.name.split(" ")[0]
-        : key === "lastName"
-          ? contact.name.split(" ").slice(1).join(" ")
-          : contact[key as keyof typeof contact],
+      key === 'firstName'
+        ? contact.firstName
+        : key === 'lastName'
+          ? (contact.lastName ?? '')
+          : key === 'owner'
+            ? (contact.owner?.name ?? '')
+            : key === 'company'
+              ? (contact.company?.name ?? '')
+              : contact[key as keyof typeof contact],
   );
-  if (viewMode === "board")
+  if (viewMode === 'board')
     return (
       <AppShell>
         <CrmPageFrame>
-          <div className="mb-3 flex items-center justify-between px-2">
-            <h1 className="text-2xl font-bold text-[#213343]">Contacts</h1>
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-[#ff5c35] px-4 py-2 text-sm font-semibold text-white"
-              onClick={() => setAddStage("lead")}
-              type="button"
-            >
-              <Plus className="h-4 w-4" />
-              Add contact
-            </button>
-          </div>
+          {titleRow}
           <ContactToolbar
             activeSegment={activeSegment}
             setActiveSegment={setActiveSegment}
-            onTable={() => setViewMode("table")}
+            onTable={() => setViewMode('table')}
             filtersVisible={filtersVisible}
             setFiltersVisible={setFiltersVisible}
             sortBy={sortBy}
             sortDirection={sortDirection}
             setSortBy={setSortBy}
             setSortDirection={setSortDirection}
+            search={search}
+            setSearch={setSearch}
+            activeView="board"
           />
           <SharedContactBoard
-            key={addStage || "none"}
+            records={contacts}
+            key={addStage || 'none'}
             initialAddStage={addStage}
-            onCloseAdd={() => setAddStage("")}
+            onCloseAdd={() => setAddStage('')}
+            onCreated={() => void loadContacts(false)}
           />
         </CrmPageFrame>
       </AppShell>
@@ -147,104 +264,36 @@ export function ContactsPage() {
   return (
     <AppShell>
       <CrmPageFrame className="max-w-[1280px]">
-        <h1 className="mb-3 px-2 text-2xl font-bold text-[#213343]">
-          Contacts
-        </h1>
-        <div className="flex items-center gap-7 border-b border-[#dbe4ed] px-2 text-xs text-[#516f90]">
-          {[
-            "All contacts",
-            "Newsletter subscribers",
-            "Unsubscribed",
-            "All customers",
-          ].map((item, index) => (
-            <button
-              key={item}
-              onClick={() => setActiveSegment(item)}
-              className={`flex items-center gap-2 border-b-2 px-1 py-3 font-semibold ${activeSegment === item ? "border-[#ff5c35] text-[#ff5c35]" : "border-transparent"}`}
-              type="button"
-            >
-              <UsersRound className="h-4 w-4" />
-              {item}
-              {index === 0 ? (
-                <span className="rounded-full bg-[#fff0e9] px-1.5 text-[#ff5c35]">
-                  2
-                </span>
-              ) : null}
-            </button>
-          ))}
-          <button className="text-lg" type="button">
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 py-3">
-          <div className="flex flex-wrap gap-2">
-            <label className="flex h-9 w-56 items-center gap-2 rounded-md border border-[#cbd6e2] px-3 text-xs text-[#516f90]">
-              <Search className="h-4 w-4" />
-              <input
-                className="min-w-0 flex-1 outline-none"
-                placeholder="Search contacts..."
-              />
-            </label>
-            <ToolbarButton
-              icon={<Filter className="h-3.5 w-3.5" />}
-              label="Filter"
-            />
-            <SortMenu
-              options={contactSortOptions}
-              value={sortBy}
-              direction={sortDirection}
-              onChange={(value, direction) => {
-                setSortBy(value);
-                setSortDirection(direction);
-              }}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode("board")}
-              className="grid h-9 w-9 place-items-center rounded-md border border-[#cbd6e2]"
-              type="button"
-            >
-              <Grid2X2 className="h-4 w-4" />
-            </button>
-            <button
-              className="grid h-9 w-9 place-items-center rounded-md border border-[#ffb397] bg-[#fff7f3] text-[#ff5c35]"
-              type="button"
-            >
-              <Columns3 className="h-4 w-4" />
-            </button>
-            <button
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#cbd6e2] px-3 text-xs font-semibold"
-              type="button"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Columns
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-5 border-b border-[#dbe4ed] pb-3 text-xs font-semibold text-[#213343]">
-          <span>
-            Contact owner <ChevronDown className="inline h-3 w-3" />
-          </span>
-          <span>
-            Create date <ChevronDown className="inline h-3 w-3" />
-          </span>
-          <span>
-            Last activity date <ChevronDown className="inline h-3 w-3" />
-          </span>
-          <span>
-            Lead status <ChevronDown className="inline h-3 w-3" />
-          </span>
-          <button className="grid h-7 w-7 place-items-center rounded-full border border-[#cbd6e2]">
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-          <button className="font-semibold text-[#ff5c35]">
-            {" "}
-            &nbsp;Advanced filters
-          </button>
-        </div>
-        <div className="mt-3 overflow-hidden rounded-md border border-[#e2e7ec]">
-          <table className="w-full table-fixed text-left text-xs">
+        {titleRow}
+        <ContactToolbar
+          activeSegment={activeSegment}
+          setActiveSegment={setActiveSegment}
+          onTable={() => setViewMode('table')}
+          onBoard={() => setViewMode('board')}
+          filtersVisible={filtersVisible}
+          setFiltersVisible={setFiltersVisible}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          setSortBy={setSortBy}
+          setSortDirection={setSortDirection}
+          search={search}
+          setSearch={setSearch}
+          activeView="table"
+        />
+        <SharedContactBoard
+          records={contacts}
+          initialAddStage={addStage}
+          onCloseAdd={() => setAddStage('')}
+          onCreated={() => void loadContacts(false)}
+          showBoard={false}
+        />
+        {actionError ? (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {actionError}
+          </p>
+        ) : null}
+        <div className="mt-3 overflow-x-auto rounded-md border border-[#e2e7ec]">
+          <table className="min-w-[1180px] w-full table-fixed text-left text-xs">
             <thead className="bg-[#f7f9fb] text-[#516f90]">
               <tr>
                 <th className="w-10 px-3 py-3">
@@ -256,16 +305,10 @@ export function ContactsPage() {
                 <th className="w-[21%] px-2 py-3">Email</th>
                 <th className="w-[12%] px-2 py-3">Phone Number</th>
                 <th className="w-[11%] px-2 py-3">Lead Status</th>
-                <th className="w-[13%] px-2 py-3">
-                  Favorite Content
-                  <br />
-                  Topics
-                </th>
-                <th className="w-[12%] px-2 py-3">
-                  Preferred
-                  <br />
-                  Channels
-                </th>
+                <th className="w-[11%] px-2 py-3">Department</th>
+                <th className="w-[13%] px-2 py-3">Role in Purchase</th>
+                <th className="w-[13%] px-2 py-3">Company</th>
+                <th className="w-[12%] px-2 py-3">Contact owner</th>
                 <th className="w-[10%] px-2 py-3">Create Date</th>
                 <th className="w-8 px-2 py-3">
                   <MoreVertical className="h-4 w-4" />
@@ -273,48 +316,129 @@ export function ContactsPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedContacts.map((contact) => (
-                <tr className="border-t border-[#e8edf1]" key={contact.email}>
-                  <td className="px-3 py-3">
-                    <input type="checkbox" />
-                  </td>
-                  <td className="px-2 py-3">
-                    <Link
-                      className="inline-flex items-center hover:text-[#ff5c35]"
-                      href={`/contacts/${contact.id}`}
-                    >
-                      <span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-full bg-[#fff0e9] font-semibold text-[#e55b2f]">
-                        {contact.initials}
-                      </span>
-                      <span className="font-semibold">{contact.name}</span>
-                    </Link>
-                  </td>
-                  <td className="px-2 py-3">
-                    {contact.email}{" "}
-                    <ExternalLink className="ml-1 inline h-3 w-3 text-[#ff5c35]" />
-                  </td>
-                  <td className="px-2 py-3 text-[#7c98b6]"></td>
-                  <td className="px-2 py-3 text-[#7c98b6]"></td>
-                  <td className="px-2 py-3 text-[#7c98b6]"></td>
-                  <td className="px-2 py-3 text-[#7c98b6]"></td>
-                  <td className="px-2 py-3 text-[#7c98b6]"></td>
-                  <td className="px-2 py-3">
-                    <MoreVertical className="h-4 w-4" />
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-[#516f90]">
+                    Loading contacts...
                   </td>
                 </tr>
-              ))}
+              ) : error ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-red-700">
+                    {error}
+                  </td>
+                </tr>
+              ) : sortedContacts.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-[#516f90]">
+                    No contacts found.
+                  </td>
+                </tr>
+              ) : (
+                sortedContacts.map((contact) => {
+                  const name =
+                    `${contact.firstName} ${contact.lastName ?? ''}`.trim();
+                  const initials =
+                    `${contact.firstName?.[0] ?? ''}${contact.lastName?.[0] ?? ''}`.toUpperCase();
+                  return (
+                    <tr
+                      className="border-t border-[#e8edf1]"
+                      key={contact.id}
+                    >
+                      <td className="px-3 py-3">
+                        <input type="checkbox" />
+                      </td>
+                      <td className="px-2 py-3">
+                        <Link
+                          className="inline-flex items-center hover:text-[#ff5c35]"
+                          href={`/contacts/${contact.id}`}
+                        >
+                          <span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-full bg-[#fff0e9] font-semibold text-[#e55b2f]">
+                            {initials}
+                          </span>
+                          <span className="font-semibold">{name}</span>
+                        </Link>
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.email || '--'}{' '}
+                        <ExternalLink className="ml-1 inline h-3 w-3 text-[#ff5c35]" />
+                      </td>
+                      <td className="px-2 py-3">{contact.phone || '--'}</td>
+                      <td className="px-2 py-3">
+                        {contact.leadStatus || '--'}
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.department || '--'}
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.roleInPurchase || '--'}
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.company?.name || '--'}
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.owner?.name || 'Not assigned'}
+                      </td>
+                      <td className="px-2 py-3">
+                        {contact.createdAt
+                          ? new Date(contact.createdAt).toLocaleDateString()
+                          : '--'}
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="relative">
+                          <button
+                            className="grid h-8 w-8 place-items-center rounded-md hover:bg-[#f1f5f8]"
+                            aria-expanded={openMenuId === contact.id}
+                            aria-label={`Actions for ${name}`}
+                            disabled={actionContactId === contact.id}
+                            onClick={() =>
+                              setOpenMenuId((current) =>
+                                current === contact.id ? null : contact.id,
+                              )
+                            }
+                            type="button"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                          {openMenuId === contact.id ? (
+                            <div className="absolute right-0 top-9 z-20 min-w-32 rounded-md border border-[#dbe4ed] bg-white p-1 text-sm shadow-lg">
+                              <button
+                                className="block w-full rounded px-3 py-2 text-left hover:bg-[#f1f5f8]"
+                                onClick={() => {
+                                  setEditingContact(contact);
+                                  setOpenMenuId(null);
+                                }}
+                                type="button"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="block w-full rounded px-3 py-2 text-left text-red-700 hover:bg-red-50"
+                                onClick={() => void deleteContact(contact)}
+                                type="button"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
           <div className="h-28" />
         </div>
         <div className="flex items-center justify-between pt-2 text-xs text-[#516f90]">
-          <span>2 contacts</span>
+          <span>{sortedContacts.length} contacts</span>
           <div className="flex gap-2">
             <button className="grid h-8 w-8 place-items-center rounded-md border border-[#dbe4ed]">
               <RefreshCw className="h-4 w-4" />
             </button>
             <button className="rounded-md border border-[#dbe4ed] px-3 py-2">
-              {" "}
+              {' '}
               &nbsp;Export
             </button>
             <button className="rounded-md border border-[#dbe4ed] px-3 py-2">
@@ -323,8 +447,148 @@ export function ContactsPage() {
             </button>
           </div>
         </div>
+        {editingContact ? (
+          <EditContactModal
+            contact={editingContact}
+            saving={actionContactId === editingContact.id}
+            onClose={() => setEditingContact(null)}
+            onSave={(values) => void updateContact(editingContact, values)}
+          />
+        ) : null}
       </CrmPageFrame>
     </AppShell>
+  );
+}
+
+type ContactEditValues = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  title: string;
+  department: string;
+  roleInPurchase: string;
+  lifecycleStage: string;
+  leadStatus: string;
+};
+
+function EditContactModal({
+  contact,
+  saving,
+  onClose,
+  onSave,
+}: {
+  contact: ContactRecord;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (values: ContactEditValues) => void;
+}) {
+  const [form, setForm] = useState<ContactEditValues>({
+    firstName: contact.firstName,
+    lastName: contact.lastName ?? '',
+    email: contact.email ?? '',
+    phone: contact.phone ?? '',
+    title: contact.title ?? '',
+    department: contact.department ?? '',
+    roleInPurchase: contact.roleInPurchase ?? '',
+    lifecycleStage: contact.lifecycleStage ?? '',
+    leadStatus: contact.leadStatus ?? '',
+  });
+  const update = (field: keyof ContactEditValues, value: string) =>
+    setForm((current) => ({ ...current, [field]: value }));
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-[#111827]/45 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Edit contact"
+    >
+      <form
+        className="max-h-[90vh] w-full max-w-[620px] overflow-y-auto rounded-xl bg-white shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (form.firstName.trim()) onSave(form);
+        }}
+      >
+        <div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4">
+          <h2 className="text-xl font-bold text-[#213343]">Edit contact</h2>
+          <button onClick={onClose} type="button" aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div className="grid gap-4 p-6 sm:grid-cols-2">
+          {(
+            [
+              ['firstName', 'First name'],
+              ['lastName', 'Last name'],
+              ['email', 'Email'],
+              ['phone', 'Phone number'],
+              ['title', 'Job title'],
+              ['department', 'Department'],
+              ['roleInPurchase', 'Role in purchase'],
+              ['lifecycleStage', 'Lifecycle stage'],
+              ['leadStatus', 'Lead status'],
+            ] as Array<[keyof ContactEditValues, string]>
+          ).map(([field, label]) => (
+            <label
+              className="grid gap-1.5 text-sm font-semibold text-[#213343]"
+              key={field}
+            >
+              {label}
+              {field === 'leadStatus' || field === 'lifecycleStage' ? (
+                <select
+                  className="h-10 rounded-md border border-[#cbd6e2] px-3 font-normal outline-none focus:border-[#006b70]"
+                  value={form[field]}
+                  onChange={(event) => update(field, event.target.value)}
+                >
+                  <option value="">Not set</option>
+                  {(field === 'leadStatus'
+                    ? ['New', 'Open', 'In progress', 'Unqualified']
+                    : [
+                        'Subscriber',
+                        'Lead',
+                        'Marketing Qualified Lead',
+                        'Sales Qualified Lead',
+                        'Opportunity',
+                        'Customer',
+                        'Evangelist',
+                        'Other',
+                      ]
+                  ).map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="h-10 rounded-md border border-[#cbd6e2] px-3 font-normal outline-none focus:border-[#006b70]"
+                  required={field === 'firstName'}
+                  type={field === 'email' ? 'email' : 'text'}
+                  value={form[field]}
+                  onChange={(event) => update(field, event.target.value)}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-[#dbe4ed] px-6 py-4">
+          <button
+            className="rounded-md border border-[#cbd6e2] px-4 py-2"
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="rounded-md bg-[#006b70] px-5 py-2 font-semibold text-white disabled:opacity-60"
+            disabled={saving}
+            type="submit"
+          >
+            {saving ? 'Saving...' : 'Save changes'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -332,24 +596,14 @@ type LegacyContactCard = { name: string; email: string; ago: string };
 
 function LegacyContactsBoard() {
   const columns: Array<[string, string, string, LegacyContactCard[]]> = [
-    ["Subscriber", "0", "bg-[#0878d1]", []],
-    [
-      "Lead",
-      "1",
-      "bg-[#e94b08]",
-      [],
-    ],
-    ["Marketing Qualified Lead", "0", "bg-[#008b87]", []],
-    ["Sales Qualified Lead", "0", "bg-[#d90088]", []],
-    [
-      "Opportunity",
-      "1",
-      "bg-[#6d45d8]",
-      [],
-    ],
-    ["Customer", "0", "bg-[#1c8b5b]", []],
-    ["Evangelist", "0", "bg-[#4774c7]", []],
-    ["Other", "0", "bg-[#64748b]", []],
+    ['Subscriber', '0', 'bg-[#0878d1]', []],
+    ['Lead', '1', 'bg-[#e94b08]', []],
+    ['Marketing Qualified Lead', '0', 'bg-[#008b87]', []],
+    ['Sales Qualified Lead', '0', 'bg-[#d90088]', []],
+    ['Opportunity', '1', 'bg-[#6d45d8]', []],
+    ['Customer', '0', 'bg-[#1c8b5b]', []],
+    ['Evangelist', '0', 'bg-[#4774c7]', []],
+    ['Other', '0', 'bg-[#64748b]', []],
   ];
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
@@ -379,7 +633,7 @@ function LegacyContactsBoard() {
                 <div className="mt-4 flex items-center justify-between border-t border-[#dbe4ed] pt-2 text-xs text-[#516f90]">
                   <span></span>
                   <span className="rounded-md border border-[#aeb6bd] px-3 py-2">
-                    {" "}
+                    {' '}
                     {card.ago} &nbsp;
                   </span>
                 </div>
@@ -393,109 +647,96 @@ function LegacyContactsBoard() {
 }
 
 function SharedContactBoard({
+  records,
   initialAddStage,
   onCloseAdd,
+  onCreated,
+  showBoard = true,
 }: {
+  records: ContactRecord[];
   initialAddStage?: string;
   onCloseAdd?: () => void;
+  onCreated?: () => void;
+  showBoard?: boolean;
 }) {
   const [columns, setColumns] = useState([
     {
-      id: "subscriber",
-      label: "Subscriber",
-      color: "bg-[#0878d1]",
+      id: 'subscriber',
+      label: 'Subscriber',
+      color: 'bg-[#0878d1]',
       items: [] as ContactCard[],
     },
     {
-      id: "lead",
-      label: "Lead",
-      color: "bg-[#e94b08]",
+      id: 'lead',
+      label: 'Lead',
+      color: 'bg-[#e94b08]',
       items: [],
     },
     {
-      id: "marketing-qualified",
-      label: "Marketing Qualified Lead",
-      color: "bg-[#008b87]",
+      id: 'marketing-qualified',
+      label: 'Marketing Qualified Lead',
+      color: 'bg-[#008b87]',
       items: [],
     },
     {
-      id: "sales-qualified",
-      label: "Sales Qualified Lead",
-      color: "bg-[#d90088]",
+      id: 'sales-qualified',
+      label: 'Sales Qualified Lead',
+      color: 'bg-[#d90088]',
       items: [],
     },
     {
-      id: "opportunity",
-      label: "Opportunity",
-      color: "bg-[#6d45d8]",
+      id: 'opportunity',
+      label: 'Opportunity',
+      color: 'bg-[#6d45d8]',
       items: [],
     },
-    { id: "customer", label: "Customer", color: "bg-[#1c8b5b]", items: [] },
-    { id: "evangelist", label: "Evangelist", color: "bg-[#4774c7]", items: [] },
-    { id: "other", label: "Other", color: "bg-[#64748b]", items: [] },
+    { id: 'customer', label: 'Customer', color: 'bg-[#1c8b5b]', items: [] },
+    { id: 'evangelist', label: 'Evangelist', color: 'bg-[#4774c7]', items: [] },
+    { id: 'other', label: 'Other', color: 'bg-[#64748b]', items: [] },
   ]);
   const [addStage, setAddStage] = useState<string | null>(
     initialAddStage || null,
   );
   useEffect(() => {
-    let active = true;
-    void fetch(`${API_URL}/contacts`)
-      .then((response) => (response.ok ? response.json() : []))
-      .then((payload: unknown) => {
-        if (!active || !Array.isArray(payload)) return;
-        const stageIds: Record<string, string> = {
-          Subscriber: "subscriber",
-          Lead: "lead",
-          "Marketing Qualified Lead": "marketing-qualified",
-          "Sales Qualified Lead": "sales-qualified",
-          Opportunity: "opportunity",
-          Customer: "customer",
-          Evangelist: "evangelist",
-          Other: "other",
-        };
-        setColumns((current) => {
-          const next = current.map((column) => ({
-            ...column,
-            items: [] as ContactCard[],
-          }));
-          for (const item of payload as Array<{
-            id: string;
-            firstName: string;
-            lastName?: string | null;
-            email?: string | null;
-            title?: string | null;
-            department?: string | null;
-            roleInPurchase?: string | null;
-            lifecycleStage?: string | null;
-          }>) {
-            const column = next.find(
-              (entry) =>
-                entry.id === (stageIds[item.lifecycleStage || ""] || "other"),
-            );
-            if (column)
-              column.items.push({
-                id: item.id,
-                name: `${item.firstName} ${item.lastName || ""}`.trim(),
-                email: item.email || "",
-                title: item.title || "",
-                department: item.department || "",
-                roleInPurchase: item.roleInPurchase || "",
-                ago: "Recently added",
-              });
-          }
-          return next;
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
+    const stageIds: Record<string, string> = {
+      Subscriber: 'subscriber',
+      Lead: 'lead',
+      'Marketing Qualified Lead': 'marketing-qualified',
+      'Sales Qualified Lead': 'sales-qualified',
+      Opportunity: 'opportunity',
+      Customer: 'customer',
+      Evangelist: 'evangelist',
+      Other: 'other',
     };
-  }, []);
+    setColumns((current) => {
+      const next = current.map((column) => ({
+        ...column,
+        items: [] as ContactCard[],
+      }));
+      for (const item of records) {
+        const column = next.find(
+          (entry) =>
+            entry.id === (stageIds[item.lifecycleStage || ''] || 'other'),
+        );
+        if (column)
+          column.items.push({
+            id: item.id,
+            name: `${item.firstName} ${item.lastName || ''}`.trim(),
+            email: item.email || '',
+            title: item.title || '',
+            department: item.department || '',
+            roleInPurchase: item.roleInPurchase || '',
+            ago: 'Recently added',
+          });
+      }
+      return next;
+    });
+  }, [records]);
   useEffect(() => {
     setAddStage(initialAddStage || null);
   }, [initialAddStage]);
   const [activityForm, setActivityForm] = useState<{
-    type: "Note" | "Task";
+    type: 'Note' | 'Task';
     contactName: string;
   } | null>(null);
   const moveContact = (
@@ -545,14 +786,14 @@ function SharedContactBoard({
     const department =
       contact.department ||
       document.querySelector<HTMLSelectElement>('[name="department"]')?.value ||
-      "";
+      '';
     const roleInPurchase =
       contact.roleInPurchase ||
       document.querySelector<HTMLSelectElement>('[name="roleInPurchase"]')
         ?.value ||
-      "";
+      '';
     const response = await fetch(`${API_URL}/contacts`, {
-      method: "POST",
+      method: 'POST',
       headers: createHeaders(createIdempotencyKey()),
       body: JSON.stringify({
         firstName: contact.firstName,
@@ -567,7 +808,7 @@ function SharedContactBoard({
       }),
     });
     if (!response.ok) {
-      window.alert("Unable to save contact");
+      window.alert('Unable to save contact');
       return;
     }
     const saved = await response.json();
@@ -580,12 +821,12 @@ function SharedContactBoard({
                 ...column.items,
                 {
                   id: saved.id,
-                  name: `${saved.firstName} ${saved.lastName || ""}`.trim(),
-                  email: saved.email || "",
-                  title: saved.title || "",
-                  department: saved.department || "",
-                  roleInPurchase: saved.roleInPurchase || "",
-                  ago: "Just now",
+                  name: `${saved.firstName} ${saved.lastName || ''}`.trim(),
+                  email: saved.email || '',
+                  title: saved.title || '',
+                  department: saved.department || '',
+                  roleInPurchase: saved.roleInPurchase || '',
+                  ago: 'Just now',
                 },
               ],
             }
@@ -594,6 +835,7 @@ function SharedContactBoard({
     );
     setAddStage(null);
     onCloseAdd?.();
+    onCreated?.();
   };
   /* Legacy inline return retained below for reference during the template migration.
   return <><SortableBoardView columns={columns} onMove={moveContact} onAdd={setAddStage} renderCard={(contact) => <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md"><Link className="block text-sm font-bold text-[#006b70] hover:underline" href={`/contacts/${contact.id}`}>{contact.name}</Link><p className="mt-3 flex items-center gap-1 text-sm text-[#006b70]"> <span className="truncate">{contact.email}</span> </p><div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]"><span></span><span className="rounded-md border border-[#9fb3c8] bg-white px-3 py-2"> {contact.ago} &nbsp;</span></div></CrmCard>} />{addStage ? <AddContactModal initialStage={addStage} stages={columns.map((column) => ({ id: column.id, label: column.label }))} onCancel={() => setAddStage(null)} onCreate={addContact} /></>;</n }
@@ -601,95 +843,103 @@ function SharedContactBoard({
 */
   return (
     <>
-      <SortableBoardView
-        columns={columns}
-        onMove={moveContact}
-        onAdd={setAddStage}
-        renderCard={(contact) => (
-          <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md">
-            <Link
-              className="block text-sm font-bold text-[#006b70] hover:underline"
-              href={`/contacts/${contact.id}`}
-            >
-              {contact.name}
-            </Link>
-            <p className="mt-3 text-sm text-[#006b70]">
-              Email: {contact.email}
-            </p>
-            {contact.title || contact.department || contact.roleInPurchase ? (
-              <dl className="mt-3 space-y-1 text-xs text-[#516f90]">
-                {contact.title ? (
-                  <div className="flex gap-2">
-                    <dt className="font-semibold text-[#345b78]">Job title:</dt>
-                    <dd className="min-w-0 truncate">{contact.title}</dd>
-                  </div>
-                ) : null}
-                {contact.department ? (
-                  <div className="flex gap-2">
-                    <dt className="font-semibold text-[#345b78]">Department:</dt>
-                    <dd className="min-w-0 truncate">{contact.department}</dd>
-                  </div>
-                ) : null}
-                {contact.roleInPurchase ? (
-                  <div className="flex gap-2">
-                    <dt className="font-semibold text-[#345b78]">Role in Purchase:</dt>
-                    <dd className="min-w-0 truncate">
-                      <span
-                        className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getPurchaseRoleColor(contact.roleInPurchase)}`}
-                        title={contact.roleInPurchase}
-                      >
-                        {contact.roleInPurchase}
-                      </span>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : null}
-            <div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]">
-              <span className="flex items-center gap-2">
-                <button
-                  className="grid h-7 w-7 place-items-center rounded p-1 hover:bg-white"
-                  aria-label={`Create note for ${contact.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setActivityForm({
-                      type: "Note",
-                      contactName: contact.name,
-                    });
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  type="button"
-                >
-                  <StickyNote className="h-4 w-4" />
-                </button>
-                <button
-                  className="grid h-7 w-7 place-items-center rounded p-1 hover:bg-white"
-                  aria-label={`Create task for ${contact.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setActivityForm({
-                      type: "Task",
-                      contactName: contact.name,
-                    });
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  type="button"
-                >
-                  <ListChecks className="h-4 w-4" />
-                </button>
-              </span>
-              <button
-                className="flex items-center gap-2 rounded-md border border-[#9fb3c8] bg-white px-3 py-1.5"
-                type="button"
+      {showBoard ? (
+        <SortableBoardView
+          columns={columns}
+          onMove={moveContact}
+          onAdd={setAddStage}
+          renderCard={(contact) => (
+            <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md">
+              <Link
+                className="block text-sm font-bold text-[#006b70] hover:underline"
+                href={`/contacts/${contact.id}`}
               >
-                <CalendarDays className="h-4 w-4" />
-                <span>{contact.ago}</span>
-                <Info className="h-4 w-4" />
-              </button>
-            </div>
-          </CrmCard>
-        )}
-      />
+                {contact.name}
+              </Link>
+              <p className="mt-3 text-sm text-[#006b70]">
+                Email: {contact.email}
+              </p>
+              {contact.title || contact.department || contact.roleInPurchase ? (
+                <dl className="mt-3 space-y-1 text-xs text-[#516f90]">
+                  {contact.title ? (
+                    <div className="flex gap-2">
+                      <dt className="font-semibold text-[#345b78]">
+                        Job title:
+                      </dt>
+                      <dd className="min-w-0 truncate">{contact.title}</dd>
+                    </div>
+                  ) : null}
+                  {contact.department ? (
+                    <div className="flex gap-2">
+                      <dt className="font-semibold text-[#345b78]">
+                        Department:
+                      </dt>
+                      <dd className="min-w-0 truncate">{contact.department}</dd>
+                    </div>
+                  ) : null}
+                  {contact.roleInPurchase ? (
+                    <div className="flex gap-2">
+                      <dt className="font-semibold text-[#345b78]">
+                        Role in Purchase:
+                      </dt>
+                      <dd className="min-w-0 truncate">
+                        <span
+                          className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getPurchaseRoleColor(contact.roleInPurchase)}`}
+                          title={contact.roleInPurchase}
+                        >
+                          {contact.roleInPurchase}
+                        </span>
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
+              <div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]">
+                <span className="flex items-center gap-2">
+                  <button
+                    className="grid h-7 w-7 place-items-center rounded p-1 hover:bg-white"
+                    aria-label={`Create note for ${contact.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setActivityForm({
+                        type: 'Note',
+                        contactName: contact.name,
+                      });
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    type="button"
+                  >
+                    <StickyNote className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="grid h-7 w-7 place-items-center rounded p-1 hover:bg-white"
+                    aria-label={`Create task for ${contact.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setActivityForm({
+                        type: 'Task',
+                        contactName: contact.name,
+                      });
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    type="button"
+                  >
+                    <ListChecks className="h-4 w-4" />
+                  </button>
+                </span>
+                <button
+                  className="flex items-center gap-2 rounded-md border border-[#9fb3c8] bg-white px-3 py-1.5"
+                  type="button"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  <span>{contact.ago}</span>
+                  <Info className="h-4 w-4" />
+                </button>
+              </div>
+            </CrmCard>
+          )}
+        />
+      ) : null}
       {addStage ? (
         <AddContactModal
           initialStage={addStage}
@@ -698,7 +948,10 @@ function SharedContactBoard({
             label: column.label,
             color: column.color,
           }))}
-          onCancel={() => setAddStage(null)}
+          onCancel={() => {
+            setAddStage(null);
+            onCloseAdd?.();
+          }}
           onCreate={addContact}
         />
       ) : null}
@@ -718,7 +971,7 @@ function ContactActivityModal({
   contactName,
   onClose,
 }: {
-  type: "Note" | "Task";
+  type: 'Note' | 'Task';
   contactName: string;
   onClose: () => void;
 }) {
@@ -745,17 +998,17 @@ function ContactActivityModal({
         <div className="grid gap-4 p-6">
           <p className="text-sm text-[#516f90]">For {contactName}</p>
           <label className="grid gap-1.5 text-sm font-semibold">
-            {type === "Note" ? "Note" : "Task title"}
+            {type === 'Note' ? 'Note' : 'Task title'}
             <input
               className="h-10 rounded-md border border-[#cbd6e2] px-3 font-normal outline-none focus:border-[#006b70]"
               autoFocus
               required
               placeholder={
-                type === "Note" ? "Write a note..." : "Enter task title"
+                type === 'Note' ? 'Write a note...' : 'Enter task title'
               }
             />
           </label>
-          {type === "Task" ? (
+          {type === 'Task' ? (
             <label className="grid gap-1.5 text-sm font-semibold">
               Due date
               <input
@@ -807,24 +1060,23 @@ function AddContactModal({
   }) => Promise<void> | void;
 }) {
   const [form, setForm] = useState({
-    email: "",
-    firstName: "",
-    lastName: "",
-    owner: "Soft Dev",
-    jobTitle: "",
-    department: "",
-    roleInPurchase: "",
-    phone: "",
+    email: '',
+    firstName: '',
+    lastName: '',
+    jobTitle: '',
+    department: '',
+    roleInPurchase: '',
+    phone: '',
     stage: initialStage,
-    leadStatus: "",
+    leadStatus: '',
   });
   const [stageOpen, setStageOpen] = useState(false);
-  const [phoneCountry, setPhoneCountry] = useState("IN");
-  const [phoneCode, setPhoneCode] = useState("+91");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [phoneExtension, setPhoneExtension] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState('IN');
+  const [phoneCode, setPhoneCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneExtension, setPhoneExtension] = useState('');
   const [phoneOpen, setPhoneOpen] = useState(false);
-  const [countrySearch, setCountrySearch] = useState("");
+  const [countrySearch, setCountrySearch] = useState('');
   const [stageOpenUp, setStageOpenUp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const stageButtonRef = useRef<HTMLButtonElement>(null);
@@ -835,14 +1087,14 @@ function AddContactModal({
 */
   const selectedStage = stages.find((stage) => stage.id === form.stage);
   const selectStage = (stageId: string) => {
-    update("stage", stageId);
+    update('stage', stageId);
     setStageOpen(false);
   };
   const selectPhoneCountry = (country: string, code: string) => {
     setPhoneCountry(country);
     setPhoneCode(code);
     setPhoneOpen(false);
-    setCountrySearch("");
+    setCountrySearch('');
   };
   const filteredPhoneCountries = useMemo(() => {
     const query = countrySearch.trim().toLowerCase();
@@ -861,11 +1113,11 @@ function AddContactModal({
       setStageOpenUp(window.innerHeight - rect.bottom < 360 && rect.top > 360);
     };
     updateMenuDirection();
-    window.addEventListener("resize", updateMenuDirection);
-    window.addEventListener("scroll", updateMenuDirection, true);
+    window.addEventListener('resize', updateMenuDirection);
+    window.addEventListener('scroll', updateMenuDirection, true);
     return () => {
-      window.removeEventListener("resize", updateMenuDirection);
-      window.removeEventListener("scroll", updateMenuDirection, true);
+      window.removeEventListener('resize', updateMenuDirection);
+      window.removeEventListener('scroll', updateMenuDirection, true);
     };
   }, [stageOpen]);
   return (
@@ -876,14 +1128,18 @@ function AddContactModal({
     >
       <form
         className="w-full max-w-[620px] rounded-xl bg-white shadow-2xl"
-          onSubmit={async (event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-            if (submitting) return;
-            setSubmitting(true);
-            try { await onCreate({
-            ...form,
-            phone: phoneNumber ? `${phoneCode} ${phoneNumber}` : "",
-            }); } finally { setSubmitting(false); }
+          if (submitting) return;
+          setSubmitting(true);
+          try {
+            await onCreate({
+              ...form,
+              phone: phoneNumber ? `${phoneCode} ${phoneNumber}` : '',
+            });
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4">
@@ -896,32 +1152,33 @@ function AddContactModal({
           <Field label="Email">
             <input
               value={form.email}
-              onChange={(event) => update("email", event.target.value)}
+              onChange={(event) => update('email', event.target.value)}
               type="email"
             />
           </Field>
           <Field label="First name">
             <input
               value={form.firstName}
-              onChange={(event) => update("firstName", event.target.value)}
+              onChange={(event) => update('firstName', event.target.value)}
             />
           </Field>
           <Field label="Last name">
             <input
               value={form.lastName}
-              onChange={(event) => update("lastName", event.target.value)}
+              onChange={(event) => update('lastName', event.target.value)}
             />
           </Field>
           <Field label="Contact owner">
             <input
-              value={form.owner}
-              onChange={(event) => update("owner", event.target.value)}
+              className="bg-[#f7f9fb] text-[#516f90]"
+              value="Assigned automatically after login"
+              readOnly
             />
           </Field>
           <Field label="Job title">
             <input
               value={form.jobTitle}
-              onChange={(event) => update("jobTitle", event.target.value)}
+              onChange={(event) => update('jobTitle', event.target.value)}
             />
           </Field>
           <Field label="Phone number">
@@ -984,7 +1241,7 @@ function AddContactModal({
                             type="button"
                           >
                             <span>
-                              {country.name}{" "}
+                              {country.name}{' '}
                               <span className="text-xs text-[#718096]">
                                 ({country.short})
                               </span>
@@ -1022,19 +1279,19 @@ function AddContactModal({
               >
                 <span className="flex items-center gap-2">
                   <span
-                    className={`h-2.5 w-2.5 rounded-full ${selectedStage?.color ?? "bg-[#94a3b8]"}`}
+                    className={`h-2.5 w-2.5 rounded-full ${selectedStage?.color ?? 'bg-[#94a3b8]'}`}
                   />
-                  {selectedStage?.label ?? "Select stage"}
+                  {selectedStage?.label ?? 'Select stage'}
                 </span>
                 <span className="text-[#516f90]"></span>
               </button>
               {stageOpen ? (
                 <div
-                  className={`absolute left-0 right-0 z-30 max-h-[min(22rem,calc(100vh-2rem))] overflow-y-auto rounded-md border border-[#cbd6e2] bg-white p-1 shadow-xl ${stageOpenUp ? "bottom-full mb-1" : "top-full mt-1"}`}
+                  className={`absolute left-0 right-0 z-30 max-h-[min(22rem,calc(100vh-2rem))] overflow-y-auto rounded-md border border-[#cbd6e2] bg-white p-1 shadow-xl ${stageOpenUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}
                 >
                   {stages.map((stage) => (
                     <button
-                      className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition hover:bg-[#f2f7fa] ${stage.id === form.stage ? "bg-[#f2f7fa] font-semibold" : ""}`}
+                      className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition hover:bg-[#f2f7fa] ${stage.id === form.stage ? 'bg-[#f2f7fa] font-semibold' : ''}`}
                       key={stage.id}
                       onClick={() => selectStage(stage.id)}
                       type="button"
@@ -1052,7 +1309,7 @@ function AddContactModal({
           <Field label="Lead status">
             <select
               value={form.leadStatus}
-              onChange={(event) => update("leadStatus", event.target.value)}
+              onChange={(event) => update('leadStatus', event.target.value)}
             >
               <option value="">Select lead status</option>
               <option>New</option>
@@ -1081,7 +1338,7 @@ function AddContactModal({
             disabled={submitting}
             type="submit"
           >
-            {submitting ? "Creating..." : "Create"}
+            {submitting ? 'Creating...' : 'Create'}
           </button>
         </div>
       </form>
@@ -1091,7 +1348,7 @@ function AddContactModal({
 
 function RoleInPurchaseSelect() {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
   const selected = purchaseRoleOptions.find(([role]) => role === value);
   return (
     <div className="relative mt-2">
@@ -1119,7 +1376,7 @@ function RoleInPurchaseSelect() {
             className="w-full px-3 py-2 text-left text-sm text-[#516f90] hover:bg-[#f2f7fa]"
             type="button"
             onClick={() => {
-              setValue("");
+              setValue('');
               setOpen(false);
             }}
           >
@@ -1151,7 +1408,7 @@ function RoleInPurchaseSelect() {
 function Field({
   label,
   children,
-  className = "",
+  className = '',
 }: {
   label: string;
   children: React.ReactNode;
@@ -1163,8 +1420,8 @@ function Field({
     >
       <span>{label}</span>
       <span className="min-w-0 [&>input]:h-10 [&>input]:w-full [&>input]:rounded-md [&>input]:border [&>input]:border-[#cbd6e2] [&>input]:px-3 [&>input]:font-normal [&>input]:outline-none [&>input:focus]:border-[#006b70] [&>select]:h-10 [&>select]:w-full [&>select]:rounded-md [&>select]:border [&>select]:border-[#cbd6e2] [&>select]:px-3 [&>select]:font-normal [&>select]:outline-none [&>select:focus]:border-[#006b70]">
-        {label === "Job title" ? null : children}
-        {label === "Job title" ? (
+        {label === 'Job title' ? null : children}
+        {label === 'Job title' ? (
           <>
             <select
               className="mt-3 h-10 w-full rounded-md border border-[#cbd6e2] px-3 font-normal outline-none focus:border-[#006b70]"
@@ -1185,22 +1442,22 @@ function Field({
 }
 function LegacyDraggableContactsBoard() {
   const [columns, setColumns] = useState([
-    { title: "Subscriber", color: "bg-[#0878d1]", cards: [] as ContactCard[] },
+    { title: 'Subscriber', color: 'bg-[#0878d1]', cards: [] as ContactCard[] },
     {
-      title: "Lead",
-      color: "bg-[#e94b08]",
+      title: 'Lead',
+      color: 'bg-[#e94b08]',
       cards: [],
     },
-    { title: "Marketing Qualified Lead", color: "bg-[#008b87]", cards: [] },
-    { title: "Sales Qualified Lead", color: "bg-[#d90088]", cards: [] },
+    { title: 'Marketing Qualified Lead', color: 'bg-[#008b87]', cards: [] },
+    { title: 'Sales Qualified Lead', color: 'bg-[#d90088]', cards: [] },
     {
-      title: "Opportunity",
-      color: "bg-[#6d45d8]",
+      title: 'Opportunity',
+      color: 'bg-[#6d45d8]',
       cards: [],
     },
-    { title: "Customer", color: "bg-[#1c8b5b]", cards: [] },
-    { title: "Evangelist", color: "bg-[#4774c7]", cards: [] },
-    { title: "Other", color: "bg-[#64748b]", cards: [] },
+    { title: 'Customer', color: 'bg-[#1c8b5b]', cards: [] },
+    { title: 'Evangelist', color: 'bg-[#4774c7]', cards: [] },
+    { title: 'Other', color: 'bg-[#64748b]', cards: [] },
   ]);
   const [dragged, setDragged] = useState<{
     column: number;
@@ -1251,7 +1508,7 @@ function LegacyDraggableContactsBoard() {
               setDropTarget(null);
           }}
           onDrop={() => drop(columnIndex)}
-          className={`min-h-[380px] min-w-[285px] flex-1 rounded-2xl border-2 p-3 transition-all duration-150 ${dropTarget === columnIndex ? "border-[#ff5c35] bg-[#fff4ef] shadow-[0_0_0_3px_rgba(255,92,53,0.16)]" : "border-transparent bg-[#f1f1f1]"}`}
+          className={`min-h-[380px] min-w-[285px] flex-1 rounded-2xl border-2 p-3 transition-all duration-150 ${dropTarget === columnIndex ? 'border-[#ff5c35] bg-[#fff4ef] shadow-[0_0_0_3px_rgba(255,92,53,0.16)]' : 'border-transparent bg-[#f1f1f1]'}`}
         >
           <div className="mb-3 flex items-center gap-2">
             <span
@@ -1274,21 +1531,21 @@ function LegacyDraggableContactsBoard() {
                 key={card.email}
                 draggable
                 onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.effectAllowed = 'move';
                   setDragged({ column: columnIndex, card: cardIndex });
                 }}
                 onDragEnd={() => {
                   setDragged(null);
                   setDropTarget(null);
                 }}
-                className={`select-none cursor-grab rounded-2xl border border-[#cbd0d5] bg-white p-4 shadow-sm transition active:cursor-grabbing ${dragged?.column === columnIndex && dragged.card === cardIndex ? "scale-[1.02] opacity-40 ring-2 ring-[#ff5c35]" : "hover:-translate-y-0.5 hover:shadow-md"}`}
+                className={`select-none cursor-grab rounded-2xl border border-[#cbd0d5] bg-white p-4 shadow-sm transition active:cursor-grabbing ${dragged?.column === columnIndex && dragged.card === cardIndex ? 'scale-[1.02] opacity-40 ring-2 ring-[#ff5c35]' : 'hover:-translate-y-0.5 hover:shadow-md'}`}
               >
                 <h3 className="font-bold text-[#006d70]">{card.name}</h3>
                 <p className="mt-3 text-sm text-[#006d70]"> {card.email} </p>
                 <div className="mt-4 flex items-center justify-between border-t border-[#dbe4ed] pt-2 text-xs text-[#516f90]">
                   <span></span>
                   <span className="rounded-md border border-[#aeb6bd] px-3 py-2">
-                    {" "}
+                    {' '}
                     {card.ago} &nbsp;
                   </span>
                 </div>
@@ -1321,6 +1578,10 @@ function ContactToolbar({
   sortDirection,
   setSortBy,
   setSortDirection,
+  search,
+  setSearch,
+  activeView,
+  onBoard,
 }: {
   activeSegment: string;
   setActiveSegment: (value: string) => void;
@@ -1331,19 +1592,23 @@ function ContactToolbar({
   sortDirection: SortDirection;
   setSortBy: (value: string) => void;
   setSortDirection: (value: SortDirection) => void;
+  search: string;
+  setSearch: (value: string) => void;
+  activeView: 'board' | 'table';
+  onBoard?: () => void;
 }) {
   return (
     <CollectionPageHeader
       activeView={activeSegment}
       onViewChange={setActiveSegment}
       savedViews={[
-        "All contacts",
-        "Newsletter subscribers",
-        "Unsubscribed",
-        "All customers",
+        'All contacts',
+        'Newsletter subscribers',
+        'Unsubscribed',
+        'All customers',
       ].map((label, index) => ({
         label,
-        count: index === 0 ? 2 : undefined,
+        count: index === 0 ? undefined : undefined,
         icon: <UsersRound className="h-4 w-4" />,
       }))}
       toolbar={
@@ -1353,21 +1618,43 @@ function ContactToolbar({
             <input
               className="min-w-0 flex-1 outline-none"
               placeholder="Search contacts..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
             />
           </label>
-          <ToolbarButton icon={<Filter className="h-4 w-4" />} label="Filter" />
-          <ToolbarButton
-            icon={<ListFilter className="h-4 w-4" />}
-            label="Sort by"
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-[#cbd6e2] px-3 text-sm font-semibold"
+            onClick={() => setFiltersVisible(!filtersVisible)}
+            type="button"
+          >
+            <Filter className="h-4 w-4" />
+            Filter
+          </button>
+          <SortMenu
+            options={contactSortOptions}
+            value={sortBy}
+            direction={sortDirection}
+            onChange={(value, direction) => {
+              setSortBy(value);
+              setSortDirection(direction);
+            }}
           />
         </>
       }
       actions={
         <div className="flex items-center gap-2">
-          <IconButton active aria-label="Board view">
+          <IconButton
+            active={activeView === 'board'}
+            onClick={onBoard}
+            aria-label="Board view"
+          >
             <Grid2X2 className="h-4 w-4" />
           </IconButton>
-          <IconButton onClick={onTable} aria-label="Table view">
+          <IconButton
+            active={activeView === 'table'}
+            onClick={onTable}
+            aria-label="Table view"
+          >
             <Columns3 className="h-4 w-4" />
           </IconButton>
           <button className="inline-flex h-10 items-center gap-2 rounded-md border border-[#cbd6e2] px-3 text-sm font-semibold">
@@ -1394,14 +1681,15 @@ function ContactToolbar({
             <Plus className="h-4 w-4" />
           </IconButton>
           <button className="font-semibold text-[#ff5c35]">
-            {" "}
+            {' '}
             &nbsp;Advanced filters
           </button>
         </>
       }
     />
   );
-  return (
+  /* legacy toolbar markup intentionally removed; CollectionPageHeader is shared by both views. */
+  /* return (
     <div className="mb-4">
       <div className="flex items-center gap-7 overflow-x-auto border-b border-[#dbe4ed] px-2 text-sm text-[#516f90]">
         {[
@@ -1498,7 +1786,7 @@ function ContactToolbar({
         </div>
       ) : null}
     </div>
-  );
+  ); */
 }
 
 function ToolbarButton({
@@ -1512,7 +1800,7 @@ function ToolbarButton({
     <button className="inline-flex h-9 items-center gap-2 rounded-md border border-[#cbd6e2] px-3 text-xs font-semibold">
       {icon}
       {label}
-      {label === "Sort by" ? <ChevronDown className="h-3 w-3" /> : null}
+      {label === 'Sort by' ? <ChevronDown className="h-3 w-3" /> : null}
     </button>
   );
 }

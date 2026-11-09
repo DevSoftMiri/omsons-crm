@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CompanyDto } from "./companies.dto";
@@ -148,10 +148,12 @@ export class CompaniesService {
     return { contacts, leads, deals, page, limit };
   }
 
-  async addContact(companyId: string, body: Record<string, unknown>) {
+  async addContact(companyId: string, body: Record<string, unknown>, ownerId: string | null) {
     await this.findOne(companyId);
     if (typeof body.firstName !== "string" || !body.firstName.trim()) throw new BadRequestException("First name is required");
-    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email: typeof body.email === "string" ? body.email.trim() || null : null, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, department: typeof body.department === "string" ? body.department.trim() || null : null, roleInPurchase: typeof body.roleInPurchase === "string" ? body.roleInPurchase.trim() || null : null, ownerId: typeof body.ownerId === "string" ? body.ownerId || null : null, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, lastContactedAt: body.lastContactedAt ? new Date(String(body.lastContactedAt)) : null, nextFollowUpAt: body.nextFollowUpAt ? new Date(String(body.nextFollowUpAt)) : null, contactSource: typeof body.contactSource === "string" ? body.contactSource || null : null, companyId } });
+    const email = typeof body.email === "string" ? body.email.trim() || null : null;
+    if (email && await this.prisma.contact.findFirst({ where: { companyId, email: { equals: email, mode: "insensitive" } }, select: { id: true } })) throw new ConflictException("A contact with this email already exists for this company");
+    return this.prisma.contact.create({ data: { firstName: body.firstName.trim(), lastName: typeof body.lastName === "string" ? body.lastName.trim() || null : null, email, phone: typeof body.phone === "string" ? body.phone.trim() || null : null, title: typeof body.title === "string" ? body.title.trim() || null : null, department: typeof body.department === "string" ? body.department.trim() || null : null, roleInPurchase: typeof body.roleInPurchase === "string" ? body.roleInPurchase.trim() || null : null, ownerId, lifecycleStage: typeof body.lifecycleStage === "string" ? body.lifecycleStage || null : null, leadStatus: typeof body.leadStatus === "string" ? body.leadStatus || null : null, lastContactedAt: body.lastContactedAt ? new Date(String(body.lastContactedAt)) : null, nextFollowUpAt: body.nextFollowUpAt ? new Date(String(body.nextFollowUpAt)) : null, contactSource: typeof body.contactSource === "string" ? body.contactSource || null : null, companyId } });
   }
 
   async listContacts(companyId: string) {
@@ -161,6 +163,10 @@ export class CompaniesService {
 
   async linkContact(companyId: string, contactId: string) {
     await this.findOne(companyId);
+    const contact = await this.prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, companyId: true, email: true } });
+    if (!contact) throw new NotFoundException("Contact not found");
+    if (contact.companyId && contact.companyId !== companyId) throw new ConflictException("This contact is already assigned to another company");
+    if (contact.email && await this.prisma.contact.findFirst({ where: { companyId, email: { equals: contact.email, mode: "insensitive" }, id: { not: contactId } }, select: { id: true } })) throw new ConflictException("A contact with this email already exists for this company");
     return this.prisma.contact.update({ where: { id: contactId }, data: { companyId } });
   }
 

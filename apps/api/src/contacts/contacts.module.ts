@@ -1,4 +1,7 @@
-import { Body, Controller, Delete, Get, Module, NotFoundException, Param, Post, Query } from "@nestjs/common";
+import { Body, ConflictException, Controller, Delete, Get, Module, NotFoundException, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt";
+import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { PrismaModule } from "../prisma/prisma.module";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -66,18 +69,43 @@ class ContactsController {
     return this.prisma.contact.delete({ where: { id } });
   }
 
-  @Post()
-  async create(@Body() body: Record<string, unknown>) {
+  @Patch(":id")
+  async update(@Param("id") id: string, @Body() body: Record<string, unknown>) {
+    await this.prisma.contact.findUniqueOrThrow({ where: { id }, select: { id: true } });
     const firstName = String(body.firstName ?? "").trim();
     if (!firstName)
       return { statusCode: 400, message: "First name is required" };
-    const requestedOwner = String(body.ownerId ?? body.owner ?? "").trim();
-    const owner = requestedOwner
-      ? await this.prisma.user.findFirst({
-          where: { OR: [{ id: requestedOwner }, { name: { equals: requestedOwner, mode: "insensitive" } }] },
-          select: { id: true },
-        })
-      : null;
+    return this.prisma.contact.update({
+      where: { id },
+      data: {
+        firstName,
+        lastName: String(body.lastName ?? "").trim() || null,
+        email: String(body.email ?? "").trim() || null,
+        phone: String(body.phone ?? "").trim() || null,
+        title: String(body.title ?? "").trim() || null,
+        department: String(body.department ?? "").trim() || null,
+        roleInPurchase: String(body.roleInPurchase ?? "").trim() || null,
+        lifecycleStage: String(body.lifecycleStage ?? "").trim() || null,
+        leadStatus: String(body.leadStatus ?? "").trim() || null,
+      },
+      include: {
+        company: { select: { id: true, name: true } },
+        owner: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  async create(@Body() body: Record<string, unknown>, @CurrentUser() user?: { sub: string }) {
+    const firstName = String(body.firstName ?? "").trim();
+    if (!firstName)
+      return { statusCode: 400, message: "First name is required" };
+    const companyId = typeof body.companyId === "string" && body.companyId ? body.companyId : null;
+    if (companyId && typeof body.email === "string" && body.email.trim()) {
+      const duplicate = await this.prisma.contact.findFirst({ where: { companyId, email: { equals: body.email.trim(), mode: "insensitive" } }, select: { id: true } });
+      if (duplicate) throw new ConflictException("A contact with this email already exists for this company");
+    }
     return this.prisma.contact.create({
       data: {
         firstName,
@@ -90,15 +118,12 @@ class ContactsController {
         lifecycleStage: String(body.lifecycleStage ?? "").trim() || null,
         leadStatus: String(body.leadStatus ?? "").trim() || null,
         contactSource: String(body.contactSource ?? "").trim() || null,
-        ownerId: owner?.id ?? null,
-        companyId:
-          typeof body.companyId === "string" && body.companyId
-            ? body.companyId
-            : null,
+        ownerId: user?.sub ?? null,
+        companyId,
       },
     });
   }
 }
 
-@Module({ imports: [PrismaModule], controllers: [ContactsController] })
+@Module({ imports: [PrismaModule, JwtModule.register({})], controllers: [ContactsController], providers: [JwtAuthGuard] })
 export class ContactsModule {}

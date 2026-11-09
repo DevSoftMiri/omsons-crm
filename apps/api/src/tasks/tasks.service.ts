@@ -14,7 +14,7 @@ export class TasksService {
     return this.prisma.task.findMany({
       where: { companyId: companyId || undefined },
       include: this.include,
-      orderBy: [{ doneAt: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ status: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }],
     });
   }
 
@@ -48,6 +48,12 @@ export class TasksService {
       data.companyId = company.id;
     }
     if (!partial && !data.companyId) throw new BadRequestException("Company is required");
+    const validStatuses = ["TODO", "IN_PROGRESS", "WAITING", "COMPLETED"] as const;
+    if (body.status !== undefined) {
+      if (!validStatuses.includes(String(body.status) as (typeof validStatuses)[number])) throw new BadRequestException("Invalid task status");
+      data.status = String(body.status);
+      data.doneAt = body.status === "COMPLETED" ? new Date() : null;
+    }
     for (const key of ["taskType", "queue", "notes", "assigneeId"] as const) if (body[key] !== undefined) data[key] = body[key] || null;
     if (body.priority !== undefined) data.priority = body.priority === null || body.priority === "" || body.priority === "NONE" ? null : body.priority;
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(String(body.dueAt)) : null;
@@ -56,7 +62,10 @@ export class TasksService {
       else if (/^\d+$/.test(String(body.reminderAt)) && data.dueAt instanceof Date) data.reminderAt = new Date(data.dueAt.getTime() - Number(body.reminderAt) * 60_000);
       else data.reminderAt = new Date(String(body.reminderAt));
     }
-    if (body.doneAt !== undefined) data.doneAt = body.doneAt ? new Date(String(body.doneAt)) : null;
+    if (body.doneAt !== undefined && body.status === undefined) {
+      data.doneAt = body.doneAt ? new Date(String(body.doneAt)) : null;
+      data.status = body.doneAt ? "COMPLETED" : "TODO";
+    }
     return data;
   }
 }

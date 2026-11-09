@@ -1,0 +1,8 @@
+CREATE TYPE "TaskStatus" AS ENUM ('TODO', 'IN_PROGRESS', 'WAITING', 'COMPLETED');
+
+ALTER TABLE "Task" ADD COLUMN "status" "TaskStatus";
+
+UPDATE "Task" SET "status" = CASE WHEN "doneAt" IS NOT NULL THEN 'COMPLETED'::"TaskStatus" ELSE 'TODO'::"TaskStatus" END;
+
+ALTER TABLE "Task" ALTER COLUMN "status" SET DEFAULT 'TODO';
+ALTER TABLE "Task" ALTER COLUMN "status" SET NOT NULL;

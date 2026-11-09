@@ -432,7 +432,9 @@ export function DealsPage() {
 
         {viewMode === "board" ? (
           <DealsBoard
-            deals={sortedDeals}
+            // The board must preserve the user's drag order. Sorting here would
+            // immediately put cards back in alphabetical/property order after a drop.
+            deals={deals}
             onCreateDeal={() => setCreateOpen(true)}
             onCreateTask={() => setTaskOpen(true)}
             onCreateNote={() => setNoteOpen(true)}
@@ -1055,7 +1057,31 @@ function DealsBoard({
   stages: PipelineStage[];
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
+  const horizontalScrollRef = useRef<HTMLDivElement>(null);
+  const [boardWidth, setBoardWidth] = useState({ content: 0, viewport: 0 });
   const [dropStage, setDropStage] = useState<string | null>(null);
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const updateDimensions = () => {
+      setBoardWidth({ content: board.scrollWidth, viewport: board.clientWidth });
+    };
+    updateDimensions();
+    const observer = new ResizeObserver(updateDimensions);
+    observer.observe(board);
+    return () => observer.disconnect();
+  }, [pipelineStages.length, deals.length]);
+  const autoScrollColumn = (element: HTMLElement, clientY: number) => {
+    const bounds = element.getBoundingClientRect();
+    const edge = Math.min(96, bounds.height * 0.25);
+    const distanceFromTop = clientY - bounds.top;
+    const distanceFromBottom = bounds.bottom - clientY;
+    if (distanceFromTop < edge) {
+      element.scrollTop -= Math.max(8, Math.round((edge - distanceFromTop) / 3));
+    } else if (distanceFromBottom < edge) {
+      element.scrollTop += Math.max(8, Math.round((edge - distanceFromBottom) / 3));
+    }
+  };
   const moveDeal = async (deal: Deal, stage: string, beforeId?: string) => {
     if (deal.stage === stage && !beforeId) return;
     const previous = deals;
@@ -1090,7 +1116,18 @@ function DealsBoard({
     <>
       <div
         ref={boardRef}
-        className="flex gap-3 overflow-x-auto pb-3"
+        className="flex w-full min-w-0 max-w-full gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-3 [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
+        onWheel={(event) => {
+          // Trackpads emit horizontal gestures as deltaX. Handle only that
+          // axis here; vertical wheel input must continue scrolling columns.
+          if (event.deltaX !== 0) {
+            event.currentTarget.scrollLeft += event.deltaX;
+          }
+        }}
+        onScroll={(event) => {
+          const scrollbar = horizontalScrollRef.current;
+          if (scrollbar) scrollbar.scrollLeft = event.currentTarget.scrollLeft;
+        }}
         onDragOver={(event) => {
           const board = boardRef.current;
           if (!board) return;
@@ -1101,15 +1138,27 @@ function DealsBoard({
       >
         {pipelineStages.map((stage) => {
           const label = stage.name;
-          const color = stage.color || "bg-[#eeeeee] text-[#333333]";
+          // Keep the first default stage consistent with the plain headers used
+          // by the other deal columns (older pipeline data may store it blue).
+          const color = label === "Appointment Scheduled"
+            ? "bg-transparent text-[#213343]"
+            : stage.color || "bg-[#eeeeee] text-[#333333]";
           const probability = stage.probability ?? 0;
           return (
             <div
-              className={`relative flex h-[calc(100vh-245px)] min-h-[360px] min-w-[290px] flex-col overflow-y-auto overflow-x-hidden rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
+              className={`relative flex h-[calc(100vh-245px)] min-h-[360px] w-[290px] min-w-[290px] shrink-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
               key={label}
               onDragEnter={() => setDropStage(label)}
-              onDragLeave={() => setDropStage(null)}
-              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node))
+                  setDropStage(null);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropStage(label);
+                autoScrollColumn(event.currentTarget, event.clientY);
+              }}
               onDrop={(event) => {
                 event.preventDefault();
                 const deal = deals.find(
@@ -1204,6 +1253,19 @@ function DealsBoard({
           );
         })}
       </div>
+      {boardWidth.content > boardWidth.viewport ? (
+        <div
+          ref={horizontalScrollRef}
+          className="sticky bottom-0 z-40 mt-1 w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden rounded bg-white/95 shadow-[0_-2px_6px_rgba(33,51,67,0.12)] [scrollbar-gutter:stable]"
+          aria-label="Scroll deal board horizontally"
+          onScroll={(event) => {
+            const board = boardRef.current;
+            if (board) board.scrollLeft = event.currentTarget.scrollLeft;
+          }}
+        >
+          <div aria-hidden="true" style={{ width: `${boardWidth.content}px`, height: 1 }} />
+        </div>
+      ) : null}
     </>
   );
 }

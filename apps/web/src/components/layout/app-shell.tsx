@@ -4,6 +4,7 @@ import {
   Bell,
   CalendarDays,
   CheckSquare,
+  ClipboardList,
   ChevronDown,
   Home,
   Menu,
@@ -21,6 +22,7 @@ const navigationItems = [
   ["Contacts", Phone, "/contacts"],
   ["Companies", Store, "/companies"],
   ["Deals", CheckSquare, "/deals"],
+  ["Tasks", ClipboardList, "/tasks"],
   ["Products", Store, "/products"],
   ["Meetings", CalendarDays, "/meetings"],
   ["Segments", CalendarDays, "/segments"],
@@ -37,6 +39,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [showSetupPrompt] = useState(false);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Prevent browser/Next scroll restoration from leaving a newly loaded page
+    // vertically or horizontally offset from the top-left position.
+    window.history.scrollRestoration = "manual";
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
 
   useEffect(() => {
     const closeCreateMenu = (event: MouseEvent) => {
@@ -103,6 +112,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         ? pathname.startsWith("/products")
                         : href === "/meetings"
                           ? pathname.startsWith("/meetings")
+                        : href === "/tasks"
+                          ? pathname.startsWith("/tasks")
                         : href === "/segments"
                           ? pathname.startsWith("/segments")
                           : false;

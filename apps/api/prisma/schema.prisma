@@ -172,6 +172,7 @@ model Contact {
   @@index([lastContactedAt])
   @@index([nextFollowUpAt])
   @@index([contactSource])
+  @@unique([companyId, email])
 }
 
 model Dealer {
@@ -379,6 +380,7 @@ model Task {
   queue      String?
   notes      String?
   doneAt     DateTime?
+  status     TaskStatus @default(TODO)
   leadId     String?
   companyId  String?
   assigneeId String?
@@ -571,6 +573,13 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  WAITING
+  COMPLETED
 }
 
 enum ActivityType {
