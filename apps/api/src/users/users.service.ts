@@ -1,16 +1,18 @@
 import { Injectable } from "@nestjs/common";
 import { QueryDto } from "../common/dto/query.dto";
+import { PrismaService } from "../prisma/prisma.service";
 
 type UserRecord = { id: string; email: string; name: string; roles: string[] };
 
 @Injectable()
 export class UsersService {
-  private readonly users: UserRecord[] = [
-    { id: "seed-admin", email: "admin@omsonsglassware.com", name: "Omsons Admin", roles: ["admin"] }
-  ];
+  constructor(private readonly prisma: PrismaService) {}
+  private readonly users: UserRecord[] = [];
 
-  list(query: QueryDto) {
-    return { data: this.users, page: query.page, limit: query.limit, total: this.users.length };
+  async list(query: QueryDto) {
+    const users = await this.prisma.user.findMany({ where: { isActive: true }, select: { id: true, email: true, name: true, roles: { select: { role: { select: { name: true } } } } }, orderBy: { name: "asc" }, take: query.limit, skip: ((query.page || 1) - 1) * (query.limit || 50) });
+    const total = await this.prisma.user.count({ where: { isActive: true } });
+    return { data: users.map((user) => ({ id: user.id, email: user.email, name: user.name === "CRM Admin" ? "Omsons Admin" : user.name, roles: user.roles.map((item) => item.role.name) })), page: query.page, limit: query.limit, total };
   }
 
   create(dto: { email: string; name: string }) {

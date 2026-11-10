@@ -54,7 +54,15 @@ export class TasksService {
       data.status = String(body.status);
       data.doneAt = body.status === "COMPLETED" ? new Date() : null;
     }
-    for (const key of ["taskType", "queue", "notes", "assigneeId"] as const) if (body[key] !== undefined) data[key] = body[key] || null;
+    for (const key of ["taskType", "queue", "notes"] as const) if (body[key] !== undefined) data[key] = body[key] || null;
+    if (body.assigneeId !== undefined) {
+      if (!body.assigneeId) data.assigneeId = null;
+      else {
+        const assignee = await this.prisma.user.findUnique({ where: { id: String(body.assigneeId) }, select: { id: true } });
+        if (!assignee) throw new BadRequestException("Selected assignee was not found");
+        data.assigneeId = assignee.id;
+      }
+    }
     if (body.priority !== undefined) data.priority = body.priority === null || body.priority === "" || body.priority === "NONE" ? null : body.priority;
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(String(body.dueAt)) : null;
     if (body.reminderAt !== undefined) {
