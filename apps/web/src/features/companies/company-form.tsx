@@ -7,6 +7,8 @@ import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
 import { industryOptions } from "./company-industries";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+const companyTypeOptions = ["B2B", "B2C", "B2B2C", "D2C", "B2G", "C2C", "C2B", "Marketplace", "Non-profit", "Government", "Other"];
+const lifecycleStageOptions = ["Subscriber", "Lead", "Marketing Qualified Lead", "Sales Qualified Lead", "Opportunity", "Customer", "Evangelist", "Other"];
 const input =
   "w-full rounded-md border border-[#9fb3c8] px-3 py-2 text-sm font-normal outline-none focus:border-[#006b70]";
 type FormState = {
@@ -175,7 +177,22 @@ export function CompanyForm({
     </label>
   );
   const renderField = (key: keyof FormState) =>
-    key === "industry" ? (
+    key === "lifecycleStage" ? (
+      <label className="grid gap-1 text-sm font-semibold text-[#213343]" key={key}>
+        <span>{fieldLabels[key]}</span>
+        <select className={`${input} bg-white`} value={form.lifecycleStage} onChange={(event) => update("lifecycleStage", event.target.value)}>
+          {lifecycleStageOptions.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+        </select>
+      </label>
+    ) : key === "type" ? (
+      <label className="grid gap-1 text-sm font-semibold text-[#213343]" key={key}>
+        <span>{fieldLabels[key]}</span>
+        <select className={`${input} bg-white`} value={form.type} onChange={(event) => update("type", event.target.value)}>
+          <option value="">Select company type</option>
+          {companyTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+      </label>
+    ) : key === "industry" ? (
       <label className="relative grid gap-1 text-sm font-semibold text-[#213343]" key={key} ref={industryPickerRef}>
         <span>{fieldLabels[key]}</span>
         <button className={`${input} flex items-center justify-between bg-white text-left`} type="button" onClick={() => setIndustryOpen((open) => !open)}>
