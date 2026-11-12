@@ -8,7 +8,6 @@ import {
   CalendarCheck,
   CalendarDays,
   ChevronDown,
-  Columns3,
   Download,
   IndianRupee,
   Info,
@@ -320,8 +319,6 @@ export function DealsPage() {
               }}
             />
             <span className="h-8 w-px bg-[#dbe4ed]" />
-            <CircleButton icon={Plus} label="Add property" />
-            <CircleButton icon={Columns3} label="Edit columns" />
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
