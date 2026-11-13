@@ -46,7 +46,7 @@ export class AuthService {
   }
 
   setCookies(response: Response, accessToken: string, refreshToken: string) {
-    const secure = this.config.get("NODE_ENV") === "production";
+    const secure = this.config.get("COOKIE_SECURE", "false") === "true";
     response.cookie("omsons_access_token", accessToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: 15 * 60 * 1000, path: "/" });
     response.cookie("omsons_refresh_token", refreshToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/" });
   }
