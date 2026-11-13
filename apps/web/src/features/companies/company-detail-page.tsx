@@ -58,7 +58,7 @@ const repairContactText = (value?: string | null) => {
 type CompanyDeal = { id: string; name: string; amount?: number | string | null; stage?: string | null; pipeline?: string | null; priority?: string | null; closeDate?: string | null; contactId?: string | null; company?: { id: string; name: string } | null; contact?: { id: string; firstName: string; lastName?: string | null } | null };
 type CompanyNote = { id: string; title?: string | null; body: string; createdAt: string; links?: Array<{ activityId: string; kind: string }> };
 type CompanyTask = { id: string; title: string; companyId: string; status?: "TODO" | "IN_PROGRESS" | "WAITING" | "COMPLETED"; dueAt?: string | null; reminderAt?: string | null; taskType?: string | null; priority?: string | null; queue?: string | null; notes?: string | null; doneAt?: string | null; assignee?: { id: string; name: string } | null; company?: { id: string; name: string } | null };
-type CompanyRecord = { id: string; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
+type CompanyRecord = { id: string; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; customerType?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
 
 const _info = [
   ["Company owner", "No owner", UserRound],
@@ -713,9 +713,9 @@ function OverviewWorkspace() {
 }
 
 function CompanyInformationPanel({ company, users, onRefresh }: { company: CompanyRecord | null; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void> }) {
-  type EditableField = "ownerName" | "industry" | "name" | "city" | "state" | "postalCode" | "numberOfEmployees" | "annualRevenue" | "timeZone" | "description" | "linkedinCompanyPage" | "lifecycleStage";
+  type EditableField = "ownerName" | "industry" | "customerType" | "name" | "city" | "state" | "postalCode" | "numberOfEmployees" | "annualRevenue" | "timeZone" | "description" | "linkedinCompanyPage" | "lifecycleStage";
   type Drafts = Record<EditableField, string>;
-  const emptyDrafts: Drafts = { ownerName: "", industry: "", name: "", city: "", state: "", postalCode: "", numberOfEmployees: "", annualRevenue: "", timeZone: "", description: "", linkedinCompanyPage: "", lifecycleStage: "Subscriber" };
+  const emptyDrafts: Drafts = { ownerName: "", industry: "", customerType: "", name: "", city: "", state: "", postalCode: "", numberOfEmployees: "", annualRevenue: "", timeZone: "", description: "", linkedinCompanyPage: "", lifecycleStage: "Subscriber" };
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
   const [savingFields, setSavingFields] = useState<Set<EditableField>>(new Set());
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<EditableField, string>>>({});
@@ -786,7 +786,7 @@ function CompanyInformationPanel({ company, users, onRefresh }: { company: Compa
     ["Company name", "name", company?.name, Building2]
   ] as const;
   const additionalTextFields = [
-    ["City", "city", company?.city, MapPin],
+    ["Company type", "customerType", company?.customerType, BriefcaseBusiness], ["City", "city", company?.city, MapPin],
     ["State/Region", "state", company?.state, MapPin], ["Postal code", "postalCode", company?.postalCode, MapPin],
     ["Number of employees", "numberOfEmployees", company?.numberOfEmployees, UsersRound], ["Annual revenue", "annualRevenue", company?.annualRevenue, Target], ["Time zone", "timeZone", company?.timeZone, CalendarDays], ["LinkedIn company page", "linkedinCompanyPage", company?.linkedinCompanyPage, ExternalLink]
   ] as const;
@@ -1277,5 +1277,6 @@ function _InsightCard({ title, body, suggestion }: { title: string; body: string
     </Panel>
   );
 }
+
 
 

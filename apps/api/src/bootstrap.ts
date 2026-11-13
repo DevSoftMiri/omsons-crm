@@ -9,6 +9,7 @@ export async function createApp() {
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix("api");
+  app.use(require("cookie-parser")());
 
   const configuredOrigins = config.get(
     "CORS_ORIGIN",

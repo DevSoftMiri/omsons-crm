@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/features/auth/auth-provider";
 
 const navigationItems = [
   ["Contacts", Phone, "/contacts"],
@@ -33,11 +34,14 @@ const navigationItems = [
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, loading, logout } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [showSetupPrompt] = useState(false);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -56,10 +60,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setCreateOpen(false);
       }
     };
+    const closeProfileMenu = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) setProfileOpen(false);
+    };
     document.addEventListener("mousedown", closeCreateMenu);
-    return () => document.removeEventListener("mousedown", closeCreateMenu);
+    document.addEventListener("mousedown", closeProfileMenu);
+    return () => {
+      document.removeEventListener("mousedown", closeCreateMenu);
+      document.removeEventListener("mousedown", closeProfileMenu);
+    };
   }, []);
 
+  if (loading || !user) return <div className="grid min-h-screen place-items-center text-sm text-[#516f90]">Checking session…</div>;
   return (
     <div className="min-h-screen bg-[#f5f6f8] text-[#213343]">
       {mobileNavOpen ? (
@@ -223,15 +235,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             ))}
             <span className="hidden h-8 w-px bg-white/35 sm:block" />
-            <button className="flex items-center gap-2 rounded-md p-1 hover:bg-white/10">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-[#dbe4ed] text-xs font-semibold text-[#516f90]">
-                H
-              </span>
-              <span className="hidden text-base font-bold sm:inline">
-                Hardik
-              </span>
-              <ChevronDown className="h-4 w-4 text-white" />
-            </button>
+            <div className="relative" ref={profileMenuRef}>
+              <button className="flex items-center gap-2 rounded-md p-1 hover:bg-white/10" onClick={() => setProfileOpen((open) => !open)} type="button" aria-expanded={profileOpen} aria-haspopup="menu">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-[#dbe4ed] text-xs font-semibold text-[#516f90]">
+                  {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                </span>
+                <span className="hidden text-left sm:inline"><span className="block text-base font-bold">{user.name || user.email}</span><span className="block text-[10px] font-normal text-white/70">{user.roles?.join(", ") || "Staff"}</span></span>
+                <ChevronDown className="h-4 w-4 text-white" />
+              </button>
+              {profileOpen ? (
+                <div className="absolute right-0 top-11 z-50 w-60 rounded-lg border border-white/10 bg-[#2f2f2f] p-2 text-white shadow-2xl" role="menu">
+                  <div className="border-b border-white/10 px-3 py-2">
+                    <p className="truncate text-sm font-semibold">{user.name || user.email}</p>
+                    <p className="truncate text-xs text-white/60">{user.roles?.join(", ") || "Staff"}</p>
+                  </div>
+                  <button className="mt-1 w-full rounded-md px-3 py-2 text-left text-sm text-white/85 hover:bg-white/10" onClick={() => void logout()} type="button" role="menuitem">Logout</button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
         <main className="min-h-screen overflow-visible p-2 lg:p-3">{children}</main>

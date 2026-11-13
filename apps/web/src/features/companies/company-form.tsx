@@ -30,12 +30,14 @@ type FormState = {
 
 export function CompanyForm({
   parentCompanyId,
+  editCompany,
   modal = false,
   onClose,
   onSaved,
   lifecycleStage = "Subscriber",
 }: {
   parentCompanyId?: string;
+  editCompany?: { id: string; [key: string]: unknown };
   modal?: boolean;
   onClose?: () => void;
   onSaved?: () => void;
@@ -110,6 +112,19 @@ export function CompanyForm({
           "",
       );
   }, [parentCompanyId]);
+  useEffect(() => {
+    if (!editCompany) return;
+    setForm({
+      domainName: String(editCompany.domainName ?? ""), name: String(editCompany.name ?? ""),
+      ownerId: String(editCompany.ownerName ?? ((editCompany.owner as { name?: string } | null)?.name ?? "")), industry: String(editCompany.industry ?? ""),
+      type: String(editCompany.customerType ?? ""), city: String(editCompany.city ?? ""), state: String(editCompany.state ?? ""),
+      postalCode: String(editCompany.postalCode ?? ""), numberOfEmployees: String(editCompany.numberOfEmployees ?? ""),
+      annualRevenue: String(editCompany.annualRevenue ?? ""), timeZone: String(editCompany.timeZone ?? ""),
+      description: String(editCompany.description ?? ""), linkedinCompanyPage: String(editCompany.linkedinCompanyPage ?? ""),
+      lifecycleStage: String(editCompany.lifecycleStage ?? lifecycleStage),
+    });
+    setParentId(String(editCompany.parentCompanyId ?? parentCompanyId ?? ""));
+  }, [editCompany, lifecycleStage, parentCompanyId]);
   const update = (key: keyof FormState, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event: React.FormEvent) => {
@@ -117,8 +132,8 @@ export function CompanyForm({
     setSaving(true);
     setError("");
     try {
-      const response = await fetch(`${API_URL}/companies`, {
-        method: "POST",
+      const response = await fetch(`${API_URL}/companies${editCompany ? `/${editCompany.id}` : ""}`, {
+        method: editCompany ? "PATCH" : "POST",
         headers: createHeaders(createIdempotencyKey()),
         body: JSON.stringify({
           domainName: form.domainName || undefined,
@@ -187,7 +202,7 @@ export function CompanyForm({
     ) : key === "type" ? (
       <label className="grid gap-1 text-sm font-semibold text-[#213343]" key={key}>
         <span>{fieldLabels[key]}</span>
-        <select className={`${input} bg-white`} value={form.type} onChange={(event) => update("type", event.target.value)}>
+        <select required className={`${input} bg-white`} value={form.type} onChange={(event) => update("type", event.target.value)}>
           <option value="">Select company type</option>
           {companyTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
         </select>
@@ -226,7 +241,7 @@ export function CompanyForm({
           : key === "linkedinCompanyPage"
             ? "url"
             : "text",
-        key === "domainName" || key === "name",
+        key === "name" || key === "ownerId",
       )
     );
   const orderedVisibleFields = fieldOrder.filter((key) =>
@@ -256,7 +271,7 @@ export function CompanyForm({
     <div className="mx-auto max-h-[calc(100vh-32px)] w-full max-w-5xl rounded-2xl border border-[#dbe4ed] bg-white p-5 shadow-2xl">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-[#213343]">
-          {parentId ? "Add sub-company" : "Add company"}
+          {editCompany ? "Edit company" : parentId ? "Add sub-company" : "Add company"}
         </h1>
         <div className="flex items-center gap-4">
           <button
@@ -487,6 +502,8 @@ export function CompanyForm({
         >
           {saving
             ? "Saving..."
+            : editCompany
+              ? "Save company"
             : parentId
               ? "Create sub-company"
               : "Create company"}

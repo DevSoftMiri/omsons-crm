@@ -24,6 +24,7 @@ import { PipelinesModule } from "./pipelines/pipelines.module";
 import { MeetingsModule } from "./meetings/meetings.module";
 import { NotesModule } from "./notes/notes.module";
 import { TasksModule } from "./tasks/tasks.module";
+import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 
 const crmCrudModules = [
   ["RolesModule", "roles"],
@@ -78,6 +79,7 @@ const queueModules = queueEnabled ? [
   ],
   controllers: [HealthController, SegmentsController],
   providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
