@@ -21,8 +21,8 @@ import { useAuth } from "@/features/auth/auth-provider";
 
 const navigationItems = [
   ["Contacts", Phone, "/contacts"],
-  ["Companies", Store, "/companies"],
-  ["Deals", CheckSquare, "/deals"],
+  ["Accounts", Store, "/companies"],
+  ["Leads", CheckSquare, "/deals"],
   ["Tasks", ClipboardList, "/tasks"],
   ["Products", Store, "/products"],
   ["Meetings", CalendarDays, "/meetings"],
@@ -211,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               {createOpen ? (
                 <div className="absolute left-0 top-11 z-50 w-52 rounded-lg bg-[#2f2f2f] py-4 text-white shadow-2xl">
-                  {["Contact", "Company", "Deal", "Ticket", "Task"].map(
+                  {["Contact", "Account", "Lead", "Ticket", "Task"].map(
                     (item) => (
                       <button
                         className="block w-full px-8 py-3 text-left text-lg hover:bg-white/10"

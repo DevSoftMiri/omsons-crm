@@ -80,6 +80,9 @@ export class CompaniesService {
         city: true, state: true, country: true, regions: true,
         customerType: true, companySize: true, annualRevenue: true, customerSince: true,
         parentCompanyId: true, ownerId: true, ownerName: true, lifecycleStage: true, isArchived: true,
+        accountSource: true, gstNumber: true, billingStreet: true, billingCity: true, billingState: true,
+        billingPostalCode: true, billingCountry: true, shippingStreet: true, shippingCity: true,
+        shippingState: true, shippingPostalCode: true, shippingCountry: true, shippingSameAsBilling: true,
         createdAt: true, updatedAt: true,
         owner: { select: { id: true, name: true } }
         , contacts: { select: { leadStatus: true } }

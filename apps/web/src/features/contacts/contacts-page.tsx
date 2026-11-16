@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 import { AppShell } from '@/components/layout/app-shell';
@@ -59,7 +59,7 @@ const contactSortOptions = [
   { value: 'createdAt', label: 'Create date' },
   { value: 'department', label: 'Department' },
   { value: 'roleInPurchase', label: 'Role in purchase' },
-  { value: 'company', label: 'Company' },
+  { value: 'company', label: 'Account' },
   { value: 'owner', label: 'Contact owner' },
   { value: 'leadStatus', label: 'Lead status' },
   { value: 'lifecycleStage', label: 'Lifecycle stage' },
@@ -307,7 +307,7 @@ export function ContactsPage() {
                 <th className="w-[11%] px-2 py-3">Lead Status</th>
                 <th className="w-[11%] px-2 py-3">Department</th>
                 <th className="w-[13%] px-2 py-3">Role in Purchase</th>
-                <th className="w-[13%] px-2 py-3">Company</th>
+                <th className="w-[13%] px-2 py-3">Account</th>
                 <th className="w-[12%] px-2 py-3">Contact owner</th>
                 <th className="w-[10%] px-2 py-3">Create Date</th>
                 <th className="w-8 px-2 py-3">

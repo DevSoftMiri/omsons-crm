@@ -6,6 +6,7 @@
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate && tsc -p tsconfig.json --outDir dist --noEmit false",
     "render-build": "prisma generate && tsc -p tsconfig.json --outDir dist --noEmit false",
+    "predev": "nest build",
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",

@@ -258,14 +258,14 @@ export function MeetingsPage() {
     const rows = [
       [
         "Meeting name",
-        "Company",
+        "Account",
         "Activity date",
         "Assigned to",
         "Type",
         "Outcome",
         "Location",
         "Contact",
-        "Deal",
+        "Lead",
       ],
       ...records.map((meeting) => [
         meeting.name,
@@ -590,14 +590,14 @@ export function MeetingsPage() {
                   />
                 </th>
                 <th className="px-3 py-3">Meeting name</th>
-                <th className="px-3 py-3">Company</th>
+                <th className="px-3 py-3">Account</th>
                 <th className="px-3 py-3">Activity date</th>
                 <th className="px-3 py-3">Activity assigned to</th>
                 <th className="px-3 py-3">Call and meeting type</th>
                 <th className="px-3 py-3">Meeting outcome</th>
                 <th className="px-3 py-3">Meeting location</th>
                 <th className="px-3 py-3">Contact</th>
-                <th className="px-3 py-3">Deal</th>
+                <th className="px-3 py-3">Lead</th>
                 <th className="w-14 px-3 py-3">
                   <Plus className="h-4 w-4" />
                 </th>
@@ -925,7 +925,7 @@ export function MeetingModal({
       return;
     }
     if (!form.companyId) {
-      window.alert("Company is required");
+      window.alert("Account is required");
       return;
     }
     setSaving(true);

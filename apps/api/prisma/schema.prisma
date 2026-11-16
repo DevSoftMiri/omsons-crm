@@ -114,6 +114,19 @@ model Company {
   timeZone                   String?
   description                String?
   linkedinCompanyPage        String?
+  accountSource              String?
+  gstNumber                  String?
+  billingStreet              String?
+  billingCity                String?
+  billingState               String?
+  billingPostalCode          String?
+  billingCountry             String?
+  shippingStreet             String?
+  shippingCity               String?
+  shippingState              String?
+  shippingPostalCode         String?
+  shippingCountry             String?
+  shippingSameAsBilling      Boolean   @default(false)
   owner                      User?     @relation("CompanyOwner", fields: [ownerId], references: [id])
   parentCompany              Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id])
   subCompanies               Company[] @relation("CompanyHierarchy")

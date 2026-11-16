@@ -89,18 +89,18 @@ type DealLineItem = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 const dealSortOptions = [
-  { value: "name", label: "Deal name" },
-  { value: "amount", label: "Deal amount" },
-  { value: "stage", label: "Deal stage" },
-  { value: "owner", label: "Deal owner" },
+  { value: "name", label: "Lead name" },
+  { value: "amount", label: "Lead amount" },
+  { value: "stage", label: "Lead stage" },
+  { value: "owner", label: "Lead owner" },
   { value: "createdAt", label: "Create date" },
   { value: "lastActivityAt", label: "Last activity date" },
   { value: "closeDate", label: "Close date" },
   { value: "expectedCloseDate", label: "Expected close date" },
-  { value: "priority", label: "Deal priority" },
+  { value: "priority", label: "Lead priority" },
   { value: "pipeline", label: "Pipeline" },
-  { value: "dealType", label: "Deal type" },
-  { value: "company", label: "Company name" },
+  { value: "dealType", label: "Lead type" },
+  { value: "company", label: "Account name" },
   { value: "contact", label: "Contact name" },
   { value: "probability", label: "Probability" },
   { value: "weightedAmount", label: "Weighted deal value" },
@@ -224,7 +224,7 @@ export function DealsPage() {
       <CrmPageFrame aria-busy={dealsLoading} className="p-4">
         <div className="mb-2 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-medium text-[#111827]">Deals</h1>
+            <h1 className="text-2xl font-medium text-[#111827]">Leads</h1>
             <ChevronDown className="h-4 w-4" />
           </div>
           <div className="flex items-center gap-3">
@@ -397,7 +397,7 @@ export function DealsPage() {
         {filtersVisible ? (
           <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
             {[
-              "Deal owner",
+              "Lead owner",
               "Create date",
               "Last activity date",
               "Close date",
@@ -783,7 +783,7 @@ function CreateDealModal({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           {field(
-            "Deal name",
+            "Lead name",
             <input
               className={input}
               required
@@ -792,7 +792,7 @@ function CreateDealModal({
             />,
           )}
           <div ref={companyRef} className="relative min-w-0 sm:col-span-2">
-            {field("Company", <input className={input} placeholder={companiesLoading ? "Loading companies..." : "Search companies"} value={companySearch || selectedCompany?.name || ""} onFocus={() => setCompanyOpen(true)} onChange={(event) => { setCompanySearch(event.target.value); setCompanyOpen(true); setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanyError(""); }} />)}
+            {field("Account", <input className={input} placeholder={companiesLoading ? "Loading companies..." : "Search companies"} value={companySearch || selectedCompany?.name || ""} onFocus={() => setCompanyOpen(true)} onChange={(event) => { setCompanySearch(event.target.value); setCompanyOpen(true); setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanyError(""); }} />)}
             {selectedCompanyId ? <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#516f90]"><span>Owner: <strong className="text-[#213343]">{selectedCompanyOwner}</strong></span><button className="font-semibold text-[#b42318] hover:underline" type="button" onClick={() => { setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanySearch(""); setCompanyOpen(false); setCompanyError(""); }}>Clear company</button></div> : null}
             {companyOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">{companyMatches.map((company) => { const owner = company.owner?.name || company.ownerName || "No owner assigned"; const context = [company.industry, [company.city, company.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "); return <button className="flex w-full min-w-0 items-center gap-1.5 rounded px-3 py-2 text-left text-xs hover:bg-[#f7f9fb]" type="button" key={company.id} onClick={() => { setSelectedCompanyId(company.id); setCompanySearch(company.name); setCompanyOpen(false); setCompanyError(""); }}><span className="min-w-0 truncate font-semibold text-[#213343]">{company.name}</span><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#516f90]">Owner: {owner}</span>{context ? <><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#8293a6]">{context}</span></> : null}</button>; })}{!companyMatches.length && !companiesLoading ? <p className="px-3 py-2 text-sm text-[#b42318]">{companiesError || "No companies found"}</p> : null}</div> : null}
             {companyError ? <p className="mt-1 text-xs text-red-700">{companyError}</p> : null}
@@ -806,7 +806,7 @@ function CreateDealModal({
             </select>,
           )}
           {field(
-            "Deal stage",
+            "Lead stage",
             <select
               className={input}
               value={stageId}
@@ -832,13 +832,13 @@ function CreateDealModal({
           )}
           {field("Close date", <input className={input} type="date" />)}
           {field(
-            "Deal owner",
+            "Lead owner",
             <select className={input}>
               <option>Soft Dev</option>
             </select>,
           )}
           {field(
-            "Deal type",
+            "Lead type",
             <select className={input}>
               <option>Select deal type</option>
               <option>New Business</option>
@@ -1754,7 +1754,7 @@ function DealCard({
           {amount == null ? "—" : amount.toLocaleString("en-IN")}
         </p>
       </DealFieldTooltip>
-      <DealFieldTooltip label="Deal owner: Soft Dev">
+      <DealFieldTooltip label="Lead owner: Soft Dev">
         <p className="mt-2 flex items-center gap-2">
           <UserRound className="h-4 w-4" aria-hidden="true" />
           Soft Dev
@@ -2186,7 +2186,7 @@ function DealsTableEmpty({ deals }: { deals: Deal[] }) {
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-[#dbe4ed] bg-[#f7f9fb]">
             <tr>
-              <th className="px-4 py-3">Company</th>
+              <th className="px-4 py-3">Account</th>
               <th className="px-4 py-3">Deal name</th>
               <th className="px-4 py-3">Deal stage</th>
               <th className="px-4 py-3">Amount</th>
