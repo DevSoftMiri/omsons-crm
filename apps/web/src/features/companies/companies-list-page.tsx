@@ -228,7 +228,7 @@ export function CompaniesListPage() {
             <CircleButton icon={EllipsisVertical} label="More" />
             <CircleButton icon={GitFork} label="Manage columns" />
             <button className="inline-flex items-center gap-2 rounded-full bg-[#005c5f] px-5 py-2.5 text-sm font-bold text-white shadow-sm" type="button" onClick={() => setShowCompanyForm(true)}>
-              Add companies
+              Add account
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>

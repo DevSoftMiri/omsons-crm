@@ -40,7 +40,7 @@ export class DashboardService {
     const baseDeal = { pipeline: query.pipeline || undefined, ownerId: query.ownerId || undefined, company: query.region ? { regions: { has: query.region } } : undefined };
     const openDealWhere = { ...baseDeal, stage: { notIn: ["Closed Won", "Closed Lost"] } };
     const dashboardQueries = await Promise.allSettled([
-      db.deal.findMany({ where: openDealWhere, select: { id: true, stage: true, amount: true, probability: true, productCategory: true, company: { select: { regions: true, customerType: true } } } }),
+      db.deal.findMany({ where: openDealWhere, orderBy: { updatedAt: "desc" }, take: 500, select: { id: true, stage: true, amount: true, probability: true, productCategory: true, company: { select: { regions: true, customerType: true } } } }),
       db.lead.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined } }),
       db.company.count({ where: { createdAt: { gte: start, lt: end }, ownerId: query.ownerId || undefined, regions: query.region ? { has: query.region } : undefined } }),
       db.visit.count({ where: { visitedAt: { gte: start, lt: end }, userId: query.ownerId || undefined } }),

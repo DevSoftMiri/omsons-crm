@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 
 export function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [email, setEmail] = useState("");
@@ -16,7 +18,9 @@ export function LoginPage() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api"}/auth/login`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
       if (!response.ok) throw new Error("Invalid email or password");
-      window.location.assign("/dashboard");
+      const loggedInUser = await response.json();
+      window.sessionStorage.setItem("omsons_session_user", JSON.stringify(loggedInUser));
+      router.replace("/dashboard");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to sign in"); } finally { setLoading(false); }
   }
 

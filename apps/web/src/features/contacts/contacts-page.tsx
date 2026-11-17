@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { SortMenu, type SortDirection } from '@/components/ui/sort-menu';
 import { sortRecords } from '@/components/ui/sort-records';
+import { ContactCreateForm } from '@/features/contacts/contact-create-form';
 
 type ContactRecord = {
   id: string;
@@ -513,9 +514,7 @@ function EditContactModal({
       >
         <div className="flex items-center justify-between border-b border-[#dbe4ed] px-6 py-4">
           <h2 className="text-xl font-bold text-[#213343]">Edit contact</h2>
-          <button onClick={onClose} type="button" aria-label="Close">
-            ×
-          </button>
+          <button onClick={onClose} type="button" aria-label="Close">×</button>
         </div>
         <div className="grid gap-4 p-6 sm:grid-cols-2">
           {(
@@ -739,11 +738,13 @@ function SharedContactBoard({
     type: 'Note' | 'Task';
     contactName: string;
   } | null>(null);
-  const moveContact = (
+  const moveContact = async (
     contactId: string,
     targetId: string,
     beforeId?: string,
-  ) =>
+  ) => {
+    const previous = columns;
+    const targetLabel = columns.find((column) => column.id === targetId)?.label || targetId;
     setColumns((current) => {
       const source = current.find((column) =>
         column.items.some((item) => item.id === contactId),
@@ -768,17 +769,19 @@ function SharedContactBoard({
         return { ...column, items };
       });
     });
-  const addContact = async (contact: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    stage: string;
-    phone?: string;
-    jobTitle?: string;
-    department?: string;
-    roleInPurchase?: string;
-    leadStatus?: string;
-  }) => {
+    try {
+      const response = await fetch(`${API_URL}/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: createHeaders(createIdempotencyKey()),
+        body: JSON.stringify({ lifecycleStage: targetLabel }),
+      });
+      if (!response.ok) throw new Error('Unable to save contact lifecycle stage');
+    } catch (error) {
+      setColumns(previous);
+      window.alert(error instanceof Error ? error.message : 'Unable to save contact lifecycle stage');
+    }
+  };
+  const addContact = async (contact: Record<string, string>) => {
     const target = contact.stage || addStage;
     if (!target) return;
     const lifecycleStage =
@@ -804,11 +807,26 @@ function SharedContactBoard({
         department,
         roleInPurchase,
         leadStatus: contact.leadStatus,
+        salutation: contact.salutation,
+        mobile: contact.mobile,
+        reportsTo: contact.reportsTo,
+        authorityLevel: contact.authorityLevel,
+        description: contact.description,
+        sameAsCompanyAddress: contact.sameAsCompanyAddress === "true",
+        mailingCountry: contact.mailingCountry,
+        mailingStreet: contact.mailingStreet,
+        mailingAddress2: contact.mailingAddress2,
+        mailingCity: contact.mailingCity,
+        mailingState: contact.mailingState,
+        mailingPostalCode: contact.mailingPostalCode,
+        companyId: contact.companyId || undefined,
         lifecycleStage,
       }),
     });
     if (!response.ok) {
-      window.alert('Unable to save contact');
+      const failure = await response.json().catch(() => null) as { message?: string | string[]; error?: string } | null;
+      const message = Array.isArray(failure?.message) ? failure.message.join(', ') : failure?.message || failure?.error || `Unable to save contact (${response.status})`;
+      window.alert(message);
       return;
     }
     const saved = await response.json();
@@ -838,7 +856,7 @@ function SharedContactBoard({
     onCreated?.();
   };
   /* Legacy inline return retained below for reference during the template migration.
-  return <><SortableBoardView columns={columns} onMove={moveContact} onAdd={setAddStage} renderCard={(contact) => <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md"><Link className="block text-sm font-bold text-[#006b70] hover:underline" href={`/contacts/${contact.id}`}>{contact.name}</Link><p className="mt-3 flex items-center gap-1 text-sm text-[#006b70]"> <span className="truncate">{contact.email}</span> </p><div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]"><span></span><span className="rounded-md border border-[#9fb3c8] bg-white px-3 py-2"> {contact.ago} &nbsp;</span></div></CrmCard>} />{addStage ? <AddContactModal initialStage={addStage} stages={columns.map((column) => ({ id: column.id, label: column.label }))} onCancel={() => setAddStage(null)} onCreate={addContact} /></>;</n }
+  return <><SortableBoardView columns={columns} onMove={moveContact} onAdd={setAddStage} renderCard={(contact) => <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md"><Link className="block text-sm font-bold text-[#006b70] hover:underline" href={`/contacts/${contact.id}`}>{contact.name}</Link><p className="mt-3 flex items-center gap-1 text-sm text-[#006b70]"> <span className="truncate">{contact.email}</span> </p><div className="mt-4 flex items-center justify-between border-t border-[#b9dced] pt-2 text-xs text-[#516f90]"><span></span><span className="rounded-md border border-[#9fb3c8] bg-white px-3 py-2"> {contact.ago} &nbsp;</span></div></CrmCard>} />{addStage ? <ContactCreateForm initialStage={addStage} stages={columns.map((column) => ({ id: column.id, label: column.label }))} onCancel={() => setAddStage(null)} onCreate={addContact} /></>;</n }
 
 */
   return (
@@ -849,7 +867,7 @@ function SharedContactBoard({
           onMove={moveContact}
           onAdd={setAddStage}
           renderCard={(contact) => (
-            <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md">
+            <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md" onDoubleClick={() => { window.location.assign(`/contacts/${contact.id}`); }}>
               <Link
                 className="block text-sm font-bold text-[#006b70] hover:underline"
                 href={`/contacts/${contact.id}`}
@@ -941,7 +959,7 @@ function SharedContactBoard({
         />
       ) : null}
       {addStage ? (
-        <AddContactModal
+        <ContactCreateForm
           initialStage={addStage}
           stages={columns.map((column) => ({
             id: column.id,
@@ -1038,7 +1056,7 @@ function ContactActivityModal({
   );
 }
 
-function AddContactModal({
+function LegacyAddContactModal({
   initialStage,
   stages,
   onCancel,

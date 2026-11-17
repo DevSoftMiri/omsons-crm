@@ -8,7 +8,7 @@ import { CompaniesService } from "./companies.service";
 export class CompaniesController {
   constructor(private readonly service: CompaniesService) {}
   @Get() list(@Query() query: Record<string, string | undefined>) { return this.service.list(query); }
-  @Post() create(@Body() dto: CompanyDto) { return this.service.create(dto); }
+  @Post() @UseGuards(JwtAuthGuard) create(@Body() dto: CompanyDto, @CurrentUser() user?: { sub: string }) { return this.service.create(dto, user?.sub ?? null); }
   @Get(":id") findOne(@Param("id") id: string) { return this.service.findOne(id); }
   @Patch(":id") update(@Param("id") id: string, @Body() dto: CompanyDto) { return this.service.update(id, dto); }
   @Get(":id/metrics") metrics(@Param("id") id: string) { return this.service.metrics(id); }

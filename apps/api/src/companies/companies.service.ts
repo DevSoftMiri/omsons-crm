@@ -62,7 +62,7 @@ export class CompaniesService {
     if (parent.parentCompanyId) throw new BadRequestException("Sub-companies cannot have their own sub-companies");
   }
 
-  private include = { owner: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { include: { owner: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } }, deals: { select: { id: true, name: true, amount: true, stage: true, pipeline: true, priority: true, closeDate: true, contactId: true, company: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
+  private include = { owner: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { include: { owner: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } }, deals: { select: { id: true, name: true, amount: true, stage: true, pipeline: true, priority: true, closeDate: true, contactId: true, company: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
 
   async list(query: Record<string, string | undefined>) {
     const page = Math.max(1, Number(query.page) || 1); const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
@@ -79,12 +79,12 @@ export class CompaniesService {
         id: true, name: true, industry: true, website: true, phone: true,
         city: true, state: true, country: true, regions: true,
         customerType: true, companySize: true, annualRevenue: true, customerSince: true,
-        parentCompanyId: true, ownerId: true, ownerName: true, lifecycleStage: true, isArchived: true,
+        parentCompanyId: true, ownerId: true, ownerName: true, createdById: true, lifecycleStage: true, marketType: true, isArchived: true,
         accountSource: true, gstNumber: true, billingStreet: true, billingCity: true, billingState: true,
         billingPostalCode: true, billingCountry: true, shippingStreet: true, shippingCity: true,
         shippingState: true, shippingPostalCode: true, shippingCountry: true, shippingSameAsBilling: true,
         createdAt: true, updatedAt: true,
-        owner: { select: { id: true, name: true } }
+        owner: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } }
         , contacts: { select: { leadStatus: true } }
       },
       orderBy: { [sortBy]: sortOrder }, skip: (page - 1) * limit, take: limit
@@ -98,7 +98,7 @@ export class CompaniesService {
     return company;
   }
 
-  async create(dto: CompanyDto) {
+  async create(dto: CompanyDto, createdById: string | null = null) {
     if (!dto.name?.trim()) throw new BadRequestException("Company name is required");
     const data = this.normalize(dto);
     if (dto.ownerName !== undefined) {
@@ -106,7 +106,7 @@ export class CompaniesService {
       data.ownerId = null;
     }
     await this.validateParent(undefined, data.parentCompanyId);
-    return this.prisma.company.create({ data, include: this.include });
+    return this.prisma.company.create({ data: { ...data, createdById }, include: this.include });
   }
 
   async update(id: string, dto: CompanyDto) {

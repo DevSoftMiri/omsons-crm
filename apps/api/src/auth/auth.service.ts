@@ -36,8 +36,8 @@ export class AuthService {
   private async issueTokens(user: any) {
     const roles = user.roles.map((item: any) => item.role.name);
     const payload = { sub: user.id, email: user.email, roles };
-    const accessToken = await this.jwt.signAsync(payload, { secret: this.config.get("JWT_ACCESS_SECRET"), expiresIn: this.config.get("JWT_ACCESS_EXPIRES_IN", "15m") });
-    const refreshToken = await this.jwt.signAsync(payload, { secret: this.config.get("JWT_REFRESH_SECRET"), expiresIn: this.config.get("JWT_REFRESH_EXPIRES_IN", "7d") });
+    const accessToken = await this.jwt.signAsync(payload, { secret: this.config.get("JWT_ACCESS_SECRET"), expiresIn: this.config.get("JWT_ACCESS_EXPIRES_IN", "24h") });
+    const refreshToken = await this.jwt.signAsync(payload, { secret: this.config.get("JWT_REFRESH_SECRET"), expiresIn: this.config.get("JWT_REFRESH_EXPIRES_IN", "24h") });
     await this.prisma.user.update({ where: { id: user.id }, data: { refreshTokenHash: await bcrypt.hash(refreshToken, 12) } });
     return {
       accessToken, refreshToken,
@@ -47,8 +47,9 @@ export class AuthService {
 
   setCookies(response: Response, accessToken: string, refreshToken: string) {
     const secure = this.config.get("COOKIE_SECURE", "false") === "true";
-    response.cookie("omsons_access_token", accessToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: 15 * 60 * 1000, path: "/" });
-    response.cookie("omsons_refresh_token", refreshToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: 7 * 24 * 60 * 60 * 1000, path: "/" });
+    const sessionMaxAge = 24 * 60 * 60 * 1000;
+    response.cookie("omsons_access_token", accessToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: sessionMaxAge, path: "/" });
+    response.cookie("omsons_refresh_token", refreshToken, { httpOnly: true, sameSite: secure ? "none" : "lax", secure, maxAge: sessionMaxAge, path: "/" });
   }
 
   async logout(refreshToken?: string) {

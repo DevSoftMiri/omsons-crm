@@ -22,6 +22,7 @@ model User {
   meetings         Meeting[]
   auditLogs        AuditLog[] @relation("AuditActor")
   ownedCompanies   Company[]  @relation("CompanyOwner")
+  createdCompanies Company[]  @relation("CompanyCreator")
   ownedContacts    Contact[]  @relation("ContactOwner")
   ownedDeals       Deal[]     @relation("DealOwner")
   followUps        FollowUp[]
@@ -95,6 +96,7 @@ model Company {
   parentCompanyId            String?
   ownerId                    String?
   ownerName                  String?
+  createdById                String?
   lifecycleStage             String    @default("Subscriber")
   isArchived                 Boolean   @default(false)
   phone                      String?
@@ -102,6 +104,7 @@ model Company {
   companySize                String?
   customerSince              DateTime?
   customerType               String?
+  marketType                 String?
   targetAccount              Boolean   @default(false)
   idealCustomerProfileTier   String?
   numberOfBlockers           Int       @default(0)
@@ -128,6 +131,7 @@ model Company {
   shippingCountry             String?
   shippingSameAsBilling      Boolean   @default(false)
   owner                      User?     @relation("CompanyOwner", fields: [ownerId], references: [id])
+  createdBy                  User?     @relation("CompanyCreator", fields: [createdById], references: [id], onDelete: SetNull)
   parentCompany              Company?  @relation("CompanyHierarchy", fields: [parentCompanyId], references: [id])
   subCompanies               Company[] @relation("CompanyHierarchy")
   contacts                   Contact[]
@@ -143,6 +147,7 @@ model Company {
   @@index([city, state])
   @@index([parentCompanyId])
   @@index([ownerId])
+  @@index([createdById])
   @@index([isArchived])
   @@index([customerType])
   @@index([companySize])
@@ -168,6 +173,18 @@ model Contact {
   nextFollowUpAt  DateTime?
   department      String?
   roleInPurchase  String?
+  salutation      String?
+  mobile          String?
+  reportsTo       String?
+  authorityLevel  String?
+  description     String?
+  sameAsCompanyAddress Boolean @default(false)
+  mailingCountry  String?
+  mailingStreet   String?
+  mailingAddress2 String?
+  mailingCity     String?
+  mailingState    String?
+  mailingPostalCode String?
   activities      Activity[]
   company         Company?   @relation(fields: [companyId], references: [id])
   owner           User?      @relation("ContactOwner", fields: [ownerId], references: [id])
@@ -175,6 +192,7 @@ model Contact {
   leads           Lead[]
   notes           Note[]
   meetings        Meeting[]
+  tasks           Task[]
 
   @@index([email])
   @@index([phone])
@@ -396,16 +414,19 @@ model Task {
   status     TaskStatus @default(TODO)
   leadId     String?
   companyId  String?
+  contactId  String?
   assigneeId String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   assignee   User?     @relation(fields: [assigneeId], references: [id])
   lead       Lead?     @relation(fields: [leadId], references: [id])
   company    Company?  @relation(fields: [companyId], references: [id])
+  contact    Contact?  @relation(fields: [contactId], references: [id])
 
   @@index([dueAt])
   @@index([doneAt])
   @@index([companyId, doneAt, dueAt])
+  @@index([contactId, doneAt, dueAt])
 }
 
 model FollowUp {

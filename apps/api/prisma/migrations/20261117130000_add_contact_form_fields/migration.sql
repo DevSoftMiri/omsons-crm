@@ -1,0 +1,12 @@
+ALTER TABLE "Contact" ADD COLUMN "salutation" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mobile" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "reportsTo" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "authorityLevel" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "description" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "sameAsCompanyAddress" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Contact" ADD COLUMN "mailingCountry" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mailingStreet" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mailingAddress2" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mailingCity" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mailingState" TEXT;
+ALTER TABLE "Contact" ADD COLUMN "mailingPostalCode" TEXT;

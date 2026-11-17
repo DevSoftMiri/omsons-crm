@@ -37,6 +37,7 @@ export class CompanyDto {
   @IsOptional() @IsString() lifecycleStage?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) regions?: string[];
   @IsOptional() @IsString() customerType?: string;
+  @IsOptional() @IsString() marketType?: string;
   @IsOptional() @IsString() companySize?: string;
   @IsOptional() annualRevenue?: number;
   @IsOptional() customerSince?: string;

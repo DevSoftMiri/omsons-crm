@@ -43,12 +43,16 @@ export class MeetingsService {
   }
 
   async create(body: Record<string, unknown>) {
-    return this.prisma.meeting.create({ data: await this.data(body) as any, select });
+    const meeting = await this.prisma.meeting.create({ data: await this.data(body) as any, select });
+    if (meeting.contactId) await this.prisma.activity.create({ data: { type: "MEETING", subject: `Meeting created: ${meeting.name}`, body: meeting.location || null, contactId: meeting.contactId, userId: meeting.ownerId || null } });
+    return meeting;
   }
 
   async update(id: string, body: Record<string, unknown>) {
     if (!(await this.prisma.meeting.findUnique({ where: { id } }))) throw new NotFoundException("Meeting not found");
-    return this.prisma.meeting.update({ where: { id }, data: await this.data(body, true) as any, select });
+    const meeting = await this.prisma.meeting.update({ where: { id }, data: await this.data(body, true) as any, select });
+    if (meeting.contactId) await this.prisma.activity.create({ data: { type: "MEETING", subject: `Meeting updated: ${meeting.name}`, body: meeting.location || null, contactId: meeting.contactId, userId: meeting.ownerId || null } });
+    return meeting;
   }
 
   async remove(id: string) {

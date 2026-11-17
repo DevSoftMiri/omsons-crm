@@ -8,11 +8,12 @@ export class TasksService {
   private readonly include = {
     assignee: { select: { id: true, name: true } },
     company: { select: { id: true, name: true } },
+    contact: { select: { id: true, firstName: true, lastName: true } },
   };
 
-  async list(companyId?: string) {
+  async list(companyId?: string, contactId?: string) {
     return this.prisma.task.findMany({
-      where: { companyId: companyId || undefined },
+      where: { companyId: companyId || undefined, contactId: contactId || undefined },
       include: this.include,
       orderBy: [{ status: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }],
     });
@@ -20,14 +21,18 @@ export class TasksService {
 
   async create(body: Record<string, unknown>) {
     const data = await this.data(body);
-    return this.prisma.task.create({ data: data as any, include: this.include });
+    const task = await this.prisma.task.create({ data: data as any, include: this.include });
+    if (task.contactId) await this.prisma.activity.create({ data: { type: "TASK", subject: `Task created: ${task.title}`, body: task.notes || null, contactId: task.contactId } });
+    return task;
   }
 
   async update(id: string, body: Record<string, unknown>) {
     const existing = await this.prisma.task.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Task not found");
     const data = await this.data(body, true);
-    return this.prisma.task.update({ where: { id }, data: data as any, include: this.include });
+    const task = await this.prisma.task.update({ where: { id }, data: data as any, include: this.include });
+    if (task.contactId) await this.prisma.activity.create({ data: { type: "TASK", subject: `Task updated: ${task.title}`, body: task.notes || null, contactId: task.contactId } });
+    return task;
   }
 
   async remove(id: string) {
@@ -46,6 +51,14 @@ export class TasksService {
       const company = await this.prisma.company.findFirst({ where: { id: body.companyId.trim(), isArchived: false }, select: { id: true } });
       if (!company) throw new BadRequestException("Selected company was not found or is archived");
       data.companyId = company.id;
+    }
+    if (body.contactId !== undefined) {
+      if (!body.contactId) data.contactId = null;
+      else {
+        const contact = await this.prisma.contact.findUnique({ where: { id: String(body.contactId) }, select: { id: true } });
+        if (!contact) throw new BadRequestException("Selected contact was not found");
+        data.contactId = contact.id;
+      }
     }
     if (!partial && !data.companyId) throw new BadRequestException("Company is required");
     const validStatuses = ["TODO", "IN_PROGRESS", "WAITING", "COMPLETED"] as const;

@@ -125,10 +125,10 @@ const companySummary = (company: Option) =>
   `Owner: ${companyOwnerName(company)} · ${companyRegionName(company)}`;
 const cleanCompanyText = (value: string) =>
   value
-    .replaceAll("Ã¯Â¿Â½", " · ")
-    .replaceAll("ÃƒÂ¯Ã‚Â¿Ã‚Â½", " · ")
-    .replaceAll("Ã‚Â·", " · ")
-    .replaceAll("Ãƒâ€šÃ‚Â·", " · ");
+    .replaceAll("¯", " · ")
+    .replaceAll("¯‚‚", " · ")
+    .replaceAll("‚·", " · ")
+    .replaceAll("€‚·", " · ");
 
 export function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -828,6 +828,7 @@ export function MeetingModal({
   companies,
   initialCompanyId = "",
   initialCompanyName = "",
+  initialContactId = "",
   onClose,
   onSaved,
 }: {
@@ -838,6 +839,7 @@ export function MeetingModal({
   companies: Option[];
   initialCompanyId?: string;
   initialCompanyName?: string;
+  initialContactId?: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -852,7 +854,7 @@ export function MeetingModal({
           type: meeting.type ?? "",
           outcome: meeting.outcome ?? "",
           location: meeting.location ?? "",
-          contactId: meeting.contactId ?? "",
+          contactId: meeting.contactId ?? initialContactId,
           dealId: meeting.dealId ?? "",
           companyId: selectedCompanyId,
         }
@@ -899,12 +901,12 @@ export function MeetingModal({
   }, []);
   useEffect(() => {
     const cleanText = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE && node.textContent?.includes("Ã"))
+      if (node.nodeType === Node.TEXT_NODE && node.textContent?.includes(""))
         node.textContent = node.textContent
-          .replaceAll("Ã‚Â·", " · ")
-          .replaceAll("Ã¯Â¿Â½", " · ")
-          .replaceAll("Ãƒâ€šÃ‚Â·", " · ")
-          .replaceAll("ÃƒÂ¯Ã‚Â¿Ã‚Â½", " · ");
+          .replaceAll("‚·", " · ")
+          .replaceAll("¯", " · ")
+          .replaceAll("€‚·", " · ")
+          .replaceAll("¯‚‚", " · ");
       else node.childNodes.forEach(cleanText);
     };
     const root = companyMenuRef.current?.closest("form");
@@ -1082,7 +1084,7 @@ export function MeetingModal({
                             onClick={() => {
                               update("companyId", main.id);
                               setCompanySearch(
-                                `${main.name ?? ""}${main.owner?.name || main.regions?.length ? ` Ã¯Â¿Â½ ${main.owner?.name ? `Owner: ${main.owner.name}` : "No owner"} Ã¯Â¿Â½ ${main.regions?.length ? main.regions.join(", ") : "No regions"}` : ""}`,
+                                `${main.name ?? ""}${main.owner?.name || main.regions?.length ? ` · ${main.owner?.name ? `Owner: ${main.owner.name}` : "No owner"} · ${main.regions?.length ? main.regions.join(", ") : "No regions"}` : ""}`,
                               );
                               setCompanyOpen(false);
                               setOpenCompanyId(null);
@@ -1094,7 +1096,7 @@ export function MeetingModal({
                             {main.owner?.name
                               ? `Owner: ${main.owner.name}`
                               : "No owner"}{" "}
-                            Ã‚Â·{" "}
+                            ·{" "}
                             {main.regions?.length
                               ? main.regions.join(", ")
                               : "No regions"}

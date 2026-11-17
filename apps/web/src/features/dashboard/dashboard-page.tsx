@@ -3,7 +3,7 @@
 "use client";
 import { AppShell } from "@/components/layout/app-shell";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Building2, CalendarDays, CheckCircle2, ClipboardList, FileText, RefreshCw, TrendingUp, Users, UserRound } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -14,8 +14,9 @@ const iconSet = [TrendingUp, FileText, Building2, CalendarDays, UserRound, Users
 
 export function DashboardPage() {
   const [period, setPeriod] = useState("current-quarter"); const [data, setData] = useState<Dashboard | null>(null); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState("");
-  const load = useCallback(async (signal?: AbortSignal) => { if (data) setRefreshing(true); else setLoading(true); setError(""); try { const response = await fetch(`${API_URL}/dashboard/summary?period=${period}`, { signal }); if (!response.ok) throw new Error(`Dashboard API returned ${response.status}`); setData(await response.json()); } catch (caught) { if (caught instanceof DOMException && caught.name === "AbortError") return; setError(caught instanceof TypeError ? "API server is unavailable" : caught instanceof Error ? caught.message : "Unable to load dashboard"); } finally { if (!signal?.aborted) { setLoading(false); setRefreshing(false); } } }, [data, period]);
-  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [period]);
+  const hasData = useRef(false);
+  const load = useCallback(async (signal?: AbortSignal) => { if (hasData.current) setRefreshing(true); else setLoading(true); setError(""); try { const response = await fetch(`${API_URL}/dashboard/summary?period=${period}`, { signal }); if (!response.ok) throw new Error(`Dashboard API returned ${response.status}`); const nextData = await response.json() as Dashboard; hasData.current = true; setData(nextData); } catch (caught) { if (caught instanceof DOMException && caught.name === "AbortError") return; setError(caught instanceof TypeError ? "API server is unavailable" : caught instanceof Error ? caught.message : "Unable to load dashboard"); } finally { if (!signal?.aborted) { setLoading(false); setRefreshing(false); } } }, [period]);
+  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [load]);
   return <AppShell><main className="mx-auto max-w-[1450px] px-2 py-3 sm:px-4"><header className="mb-4 flex items-start justify-between"><div><p className="text-[10px] font-semibold text-[#ff5c35]">Sales workspace</p><h1 className="text-lg font-bold text-[#172235]">Omsons CRM Dashboard</h1><p className="text-[10px] text-[#718096]">Monitor pipeline, distributors, follow-ups, and revenue.</p></div><div className="flex items-center gap-2"><span aria-live="polite" className={`text-[10px] text-[#718096] ${refreshing ? "opacity-100" : "opacity-0"}`}>Updating…</span><select className="h-7 rounded-md border bg-white px-2 text-[10px]" value={period} onChange={(event) => setPeriod(event.target.value)}><option value="current-month">Current month</option><option value="current-quarter">Current quarter</option><option value="current-year">Current year</option></select><button className="flex h-7 items-center gap-1 rounded-md border bg-white px-2 text-[10px] disabled:opacity-50" disabled={refreshing} onClick={() => void load()} type="button"><RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} /> Refresh</button></div></header>{loading ? <DashboardSkeleton /> : error || !data ? <div className="rounded-md border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{error || "No dashboard data"}<br /><button className="mt-3 rounded-md bg-[#ff5c35] px-4 py-2 text-xs font-semibold text-white" onClick={() => void load()} type="button">Retry</button></div> : <DashboardContent data={data} />}</main></AppShell>;
 }
 
