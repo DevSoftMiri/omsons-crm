@@ -1104,7 +1104,7 @@ function DealsBoard({
         body: JSON.stringify({ stage }),
       });
       if (!response.ok) throw new Error("Unable to move deal");
-      if (deal.stage !== "Closed Won" && stage === "Closed Won") onDealWon?.();
+      if (deal.stage !== "Qualified" && stage === "Qualified") onDealWon?.();
     } catch {
       onDealsChange(previous);
     }

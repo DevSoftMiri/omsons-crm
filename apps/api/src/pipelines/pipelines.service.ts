@@ -7,13 +7,12 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 
 const DEFAULT_STAGES = [
-  ["Appointment Scheduled", "bg-[#0b6fd3] text-white", 20],
-  ["Qualified To Buy", "bg-[#c83a00] text-white", 40],
-  ["Presentation Scheduled", "bg-[#d00082] text-white", 60],
-  ["Decision Maker Bought-In", "bg-[#7b4de3] text-white", 80],
-  ["Contract Sent", "bg-[#f5b82e] text-[#171717]", 90],
-  ["Closed Won", "bg-[#00843d] text-white", 100],
-  ["Closed Lost", "bg-[#b4002b] text-white", 0],
+  ["New", "bg-[#0b6fd3] text-white", 20],
+  ["Presentation", "bg-[#d00082] text-white", 40],
+  ["Negotiation", "bg-[#7b4de3] text-white", 60],
+  ["Quotation Sent", "bg-[#f5b82e] text-[#171717]", 80],
+  ["Qualified", "bg-[#00843d] text-white", 90],
+  ["Unqualified", "bg-[#b4002b] text-white", 0],
 ] as const;
 const ALLOWED_STAGE_COLORS = new Set<string>([
   "bg-[#171717] text-white", "bg-[#b4002b] text-white", "bg-[#c83a00] text-white",
@@ -88,7 +87,7 @@ export class PipelinesService {
   }
 
   async updateStage(pipelineId: string, stageId: string, body: Record<string, unknown>) {
-    await this.stage(pipelineId, stageId);
+    const existingStage = await this.stage(pipelineId, stageId);
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = this.requiredName(body.name, "Stage name");
     if (body.description !== undefined) data.description = this.optionalString(body.description);
@@ -96,7 +95,20 @@ export class PipelinesService {
     if (body.color !== undefined) data.color = this.color(body.color);
     if (body.probability !== undefined) data.probability = this.probability(body.probability);
     try {
-      return await this.prisma.pipelineStage.update({ where: { id: stageId }, data });
+      return await this.prisma.$transaction(async (transaction) => {
+        const updatedStage = await transaction.pipelineStage.update({ where: { id: stageId }, data });
+
+        // Deals keep a denormalized stage name for filtering and display. Keep it
+        // synchronized when a stage is renamed so existing leads stay on the board.
+        if (typeof data.name === "string" && data.name !== existingStage.name) {
+          await transaction.deal.updateMany({
+            where: { stageId },
+            data: { stage: data.name },
+          });
+        }
+
+        return updatedStage;
+      });
     } catch (error) {
       if (this.isUniqueError(error)) throw new ConflictException("A stage with this name already exists in this pipeline");
       throw error;
@@ -118,7 +130,30 @@ export class PipelinesService {
 
   private async ensureDefault() {
     const existing = await this.prisma.pipeline.findUnique({ where: { name: "Sales Pipeline" }, include: { stages: true } });
-    if (existing) return existing;
+    if (existing) {
+      // Reconcile the original seeded stages for installations that have not
+      // run the migration yet. Stage IDs are retained so lead associations stay intact.
+      await this.prisma.$transaction(async (transaction) => {
+        const stages = [...existing.stages].sort((left, right) => left.order - right.order);
+        for (let index = 0; index < DEFAULT_STAGES.length; index += 1) {
+          const stage = stages[index];
+          if (!stage) break;
+          const [name, color, probability] = DEFAULT_STAGES[index];
+          if (stage.name !== name || stage.color !== color || stage.probability !== probability || stage.order !== index) {
+            await transaction.pipelineStage.update({ where: { id: stage.id }, data: { name, color, probability, order: index } });
+            await transaction.deal.updateMany({ where: { stageId: stage.id }, data: { stage: name } });
+          }
+        }
+        for (const stage of stages.slice(DEFAULT_STAGES.length)) {
+          const target = stages[DEFAULT_STAGES.length - 1];
+          if (target) {
+            await transaction.deal.updateMany({ where: { stageId: stage.id }, data: { stageId: target.id, stage: DEFAULT_STAGES[DEFAULT_STAGES.length - 1][0] } });
+          }
+          await transaction.pipelineStage.delete({ where: { id: stage.id } });
+        }
+      });
+      return this.prisma.pipeline.findUniqueOrThrow({ where: { id: existing.id }, include: { stages: { orderBy: { order: "asc" } } } });
+    }
     return this.prisma.pipeline.create({
       data: {
         name: "Sales Pipeline",
