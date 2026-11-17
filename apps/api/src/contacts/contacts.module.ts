@@ -109,7 +109,8 @@ class ContactsController {
     const data: Record<string, unknown> = {};
     const stringFields = ["firstName", "lastName", "email", "phone", "title", "department", "roleInPurchase", "salutation", "mobile", "reportsTo", "authorityLevel", "description", "mailingCountry", "mailingStreet", "mailingAddress2", "mailingCity", "mailingState", "mailingPostalCode", "lifecycleStage", "leadStatus"];
     for (const field of stringFields) if (body[field] !== undefined) data[field] = String(body[field] ?? "").trim() || null;
-    if (body.sameAsCompanyAddress !== undefined) data.sameAsCompanyAddress = Boolean(body.sameAsCompanyAddress);
+    if (body.sameAsCompanyAddress !== undefined) data.sameAsCompanyAddress = body.sameAsCompanyAddress === true || body.sameAsCompanyAddress === "true";
+    if (body.companyId !== undefined) data.companyId = typeof body.companyId === "string" && body.companyId ? body.companyId : null;
     if (!Object.keys(data).length) return this.prisma.contact.findUniqueOrThrow({ where: { id }, include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, name: true } } } });
     return this.prisma.contact.update({
       where: { id },

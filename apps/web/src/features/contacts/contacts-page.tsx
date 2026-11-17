@@ -37,6 +37,7 @@ import {
 import { SortMenu, type SortDirection } from '@/components/ui/sort-menu';
 import { sortRecords } from '@/components/ui/sort-records';
 import { ContactCreateForm } from '@/features/contacts/contact-create-form';
+import { ContactEditForm } from '@/features/contacts/contact-edit-form';
 
 type ContactRecord = {
   id: string;
@@ -52,7 +53,7 @@ type ContactRecord = {
   department?: string | null;
   roleInPurchase?: string | null;
   owner?: { name?: string | null } | null;
-  company?: { name?: string | null } | null;
+  company?: { id?: string; name?: string | null } | null;
 };
 const contactSortOptions = [
   { value: 'firstName', label: 'First name' },
@@ -154,6 +155,14 @@ export function ContactsPage() {
   useEffect(() => {
     void loadContacts();
   }, [loadContacts]);
+  useEffect(() => {
+    const closeMenu = (event: MouseEvent) => {
+      if ((event.target as HTMLElement).closest('[data-contact-table-menu]')) return;
+      setOpenMenuId(null);
+    };
+    document.addEventListener('mousedown', closeMenu);
+    return () => document.removeEventListener('mousedown', closeMenu);
+  }, []);
   const deleteContact = async (contact: ContactRecord) => {
     const name = `${contact.firstName} ${contact.lastName ?? ''}`.trim();
     if (!window.confirm(`Delete ${name}? This action cannot be undone.`)) return;
@@ -176,7 +185,7 @@ export function ContactsPage() {
   };
   const updateContact = async (
     contact: ContactRecord,
-    values: ContactEditValues,
+    values: Record<string, string>,
   ) => {
     setActionContactId(contact.id);
     setActionError('');
@@ -258,7 +267,14 @@ export function ContactsPage() {
             initialAddStage={addStage}
             onCloseAdd={() => setAddStage('')}
             onCreated={() => void loadContacts(false)}
+            onEdit={(id) => { const contact = contacts.find((item) => item.id === id); if (contact) setEditingContact(contact); }}
+            onDelete={(id) => { const contact = contacts.find((item) => item.id === id); if (contact) void deleteContact(contact); }}
           />
+          {editingContact ? <ContactEditForm
+            contact={editingContact}
+            onCancel={() => setEditingContact(null)}
+            onSave={(values) => void updateContact(editingContact, values)}
+          /> : null}
         </CrmPageFrame>
       </AppShell>
     );
@@ -286,6 +302,8 @@ export function ContactsPage() {
           initialAddStage={addStage}
           onCloseAdd={() => setAddStage('')}
           onCreated={() => void loadContacts(false)}
+          onEdit={(id) => { const contact = contacts.find((item) => item.id === id); if (contact) setEditingContact(contact); }}
+          onDelete={(id) => { const contact = contacts.find((item) => item.id === id); if (contact) void deleteContact(contact); }}
           showBoard={false}
         />
         {actionError ? (
@@ -386,7 +404,7 @@ export function ContactsPage() {
                           : '--'}
                       </td>
                       <td className="px-2 py-3">
-                        <div className="relative">
+                        <div className="relative" data-contact-table-menu>
                           <button
                             className="grid h-8 w-8 place-items-center rounded-md hover:bg-[#f1f5f8]"
                             aria-expanded={openMenuId === contact.id}
@@ -449,10 +467,9 @@ export function ContactsPage() {
           </div>
         </div>
         {editingContact ? (
-          <EditContactModal
+          <ContactEditForm
             contact={editingContact}
-            saving={actionContactId === editingContact.id}
-            onClose={() => setEditingContact(null)}
+            onCancel={() => setEditingContact(null)}
             onSave={(values) => void updateContact(editingContact, values)}
           />
         ) : null}
@@ -650,14 +667,26 @@ function SharedContactBoard({
   initialAddStage,
   onCloseAdd,
   onCreated,
+  onEdit,
+  onDelete,
   showBoard = true,
 }: {
   records: ContactRecord[];
   initialAddStage?: string;
   onCloseAdd?: () => void;
   onCreated?: () => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
   showBoard?: boolean;
 }) {
+  useEffect(() => {
+    const closeMenus = (event: MouseEvent) => {
+      if ((event.target as HTMLElement).closest('details')) return;
+      document.querySelectorAll<HTMLDetailsElement>('[data-contact-card-menu][open]').forEach((menu) => { menu.open = false; });
+    };
+    document.addEventListener('mousedown', closeMenus);
+    return () => document.removeEventListener('mousedown', closeMenus);
+  }, []);
   const [columns, setColumns] = useState([
     {
       id: 'subscriber',
@@ -867,7 +896,16 @@ function SharedContactBoard({
           onMove={moveContact}
           onAdd={setAddStage}
           renderCard={(contact) => (
-            <CrmCard className="border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md" onDoubleClick={() => { window.location.assign(`/contacts/${contact.id}`); }}>
+            <CrmCard className="group relative border-2 border-[#4da3ff] bg-[#e8f6ff] p-3 shadow-sm transition hover:border-[#1683ff] hover:shadow-md" onDoubleClick={() => { window.location.assign(`/contacts/${contact.id}`); }}>
+              <details className="absolute right-2 top-2 z-20" data-contact-card-menu>
+                <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-md text-[#516f90] opacity-0 transition hover:bg-white group-hover:opacity-100 focus:opacity-100" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()} aria-label={`Actions for ${contact.name}`}>
+                  <MoreVertical className="h-5 w-5" />
+                </summary>
+                <div className="absolute right-0 top-9 w-32 rounded-md border border-[#dbe4ed] bg-white p-1 text-left shadow-lg" onClick={(event) => event.stopPropagation()}>
+                  <button className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]" type="button" onClick={() => onEdit(contact.id)}>Edit</button>
+                  <button className="block w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50" type="button" onClick={() => onDelete(contact.id)}>Delete</button>
+                </div>
+              </details>
               <Link
                 className="block text-sm font-bold text-[#006b70] hover:underline"
                 href={`/contacts/${contact.id}`}
