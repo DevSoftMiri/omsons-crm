@@ -23,6 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const originalFetch = window.fetch;
+    const handleAuthenticated = (event: Event) => {
+      const nextUser = (event as CustomEvent<CurrentUser>).detail;
+      if (!nextUser?.id) return;
+      setUser(nextUser);
+      setLoading(false);
+    };
+    window.addEventListener("omsons-authenticated", handleAuthenticated);
     let refreshing: Promise<Response> | null = null;
     const refreshSession = () => {
       if (!refreshing) {
@@ -84,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSession()
       .catch(() => { /* Keep a cached session visible while the API is temporarily unavailable. */ })
       .finally(() => { if (!hasCachedUser) setLoading(false); });
-    return () => { window.fetch = originalFetch; };
+    return () => { window.fetch = originalFetch; window.removeEventListener("omsons-authenticated", handleAuthenticated); };
   }, []);
   const logout = async () => {
     try { await fetch(`${API_URL}/auth/logout`, { method: "POST", credentials: "include" }); }

@@ -20,6 +20,7 @@ export function LoginPage() {
       if (!response.ok) throw new Error("Invalid email or password");
       const loggedInUser = await response.json();
       window.sessionStorage.setItem("omsons_session_user", JSON.stringify(loggedInUser));
+      window.dispatchEvent(new CustomEvent("omsons-authenticated", { detail: loggedInUser }));
       router.replace("/dashboard");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to sign in"); } finally { setLoading(false); }
   }
