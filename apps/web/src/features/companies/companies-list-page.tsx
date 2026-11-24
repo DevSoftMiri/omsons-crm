@@ -31,6 +31,7 @@ import { useEffect, useRef, useState } from "react";
 import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
 import { sortRecords } from "@/components/ui/sort-records";
 import { CompanyForm } from "./company-form";
+import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 type Company = { id: string; name: string; phone?: string | null; createdAt?: string; updatedAt?: string; ownerName?: string | null; owner?: { id?: string; name: string } | null; contacts?: { leadStatus?: string | null }[]; industry?: string | null; city?: string | null; state?: string | null; country: string; regions: string[]; isArchived: boolean; parentCompanyId?: string | null; customerType?: string | null; companySize?: string | null; annualRevenue?: number | null; customerSince?: string | null; lifecycleStage?: string | null };
@@ -151,8 +152,8 @@ export function CompaniesListPage() {
   }, []);
   const loadCompanies = async () => {
     setLoading(true); setError("");
-    try { const params = new URLSearchParams({ search, archived: String(showArchived) }); if (filterGroup.children.length) params.set("filters", JSON.stringify(filterGroup)); const response = await fetch(`${API_URL}/companies?${params.toString()}`); if (!response.ok) throw new Error(); const result = (await response.json()) as CompanyResponse; const uniqueCompanies = uniqueCompaniesById(result.data); setCompanies(uniqueCompanies); const next = { ...initialBoard }; uniqueCompanies.forEach((company) => { const stage = BOARD_COLUMNS.includes(company.lifecycleStage as BoardColumn) ? company.lifecycleStage as BoardColumn : "Subscriber"; next[stage].push({ id: company.id, name: company.name, owner: companyOwnerLabel(company), industry: company.industry || "No industry", city: company.city || "No city", lifecycleStage: stage, isSubCompany: Boolean(company.parentCompanyId), parentName: company.parentCompanyId ? uniqueCompanies.find((parent) => parent.id === company.parentCompanyId)?.name : undefined }); }); setBoard(next); }
-    catch { setError("Unable to load companies. Make sure the backend and database are running."); }
+    try { const params = new URLSearchParams({ search, archived: String(showArchived) }); if (filterGroup.children.length) params.set("filters", JSON.stringify(filterGroup)); const response = await fetch(`${API_URL}/companies?${params.toString()}`, { headers: createHeaders(createIdempotencyKey()), cache: "no-store" }); if (!response.ok) throw new Error(); const result = (await response.json()) as CompanyResponse; const uniqueCompanies = uniqueCompaniesById(result.data); setCompanies(uniqueCompanies); const next = { ...initialBoard }; uniqueCompanies.forEach((company) => { const stage = BOARD_COLUMNS.includes(company.lifecycleStage as BoardColumn) ? company.lifecycleStage as BoardColumn : "Subscriber"; next[stage].push({ id: company.id, name: company.name, owner: companyOwnerLabel(company), industry: company.industry || "No industry", city: company.city || "No city", lifecycleStage: stage, isSubCompany: Boolean(company.parentCompanyId), parentName: company.parentCompanyId ? uniqueCompanies.find((parent) => parent.id === company.parentCompanyId)?.name : undefined }); }); setBoard(next); }
+    catch { setError("Unable to load accounts. Make sure the backend and database are running."); }
     finally { setLoading(false); }
   };
   useEffect(() => { const timer = window.setTimeout(() => void loadCompanies(), 250); return () => window.clearTimeout(timer); }, [search, showArchived, filterGroup]);
@@ -239,13 +240,13 @@ export function CompaniesListPage() {
             <button className={`px-4 py-2.5 text-sm font-medium ${viewMode === "table" ? "border-b-2 border-[#ff5c35] bg-[#fff1eb] text-[#ff5c35]" : "text-[#516f90]"}`} onClick={() => setViewMode("table")} type="button">
               <span className="inline-flex items-center gap-2">
                 <Table2 className="h-4 w-4" />
-                All companies
+              All accounts
               </span>
             </button>
             <button className="px-3 py-2.5 text-sm font-medium text-[#516f90]" type="button">
               <span className="inline-flex items-center gap-2">
                 <Table2 className="h-4 w-4" />
-                My companies
+              My accounts
               </span>
             </button>
             <button className="p-3 text-[#213343]" aria-label="Add column" onClick={() => setShowViewMenu((open) => !open)} type="button">
@@ -274,7 +275,7 @@ export function CompaniesListPage() {
         <div className="flex flex-col gap-3 py-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center justify-start gap-3">
             <label className="flex h-10 w-[280px] max-w-full items-center gap-3 rounded-full border border-[#9fb3c8] px-4 text-[#516f90]">
-              <input className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#7c98b6]" placeholder={viewMode === "board" ? "Search ( / )" : "Search companies..."} value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#7c98b6]" placeholder={viewMode === "board" ? "Search ( / )" : "Search accounts..."} value={search} onChange={(event) => setSearch(event.target.value)} />
               <Search className="h-4 w-4" />
             </label>
             <div className="relative"><button className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#9fb3c8] bg-[#f7f9fb]"}`} type="button" onClick={() => { setFiltersVisible(true); setFiltersOpen((open) => !open); }}><Filter className="h-4 w-4" />Filter{filterGroup.children.length ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff5c35] px-1 text-xs text-white">{filterGroup.children.length}</span> : null}</button>{filtersOpen ? <AdvancedFilters value={filterGroup} onChange={setFilterGroup} onClose={() => setFiltersOpen(false)} /> : null}</div>
@@ -292,13 +293,13 @@ export function CompaniesListPage() {
               <CircleButton icon={Settings} label="View settings" onClick={() => setShowSettingsMenu((open) => !open)} />
               {showSettingsMenu ? <ViewSettingsMenu viewMode={viewMode} setViewMode={setViewMode} sortBy={sortBy} sortDirection={sortDirection} saveView={saveView} resetView={resetView} exportView={exportView} onOpenSort={() => { setShowSettingsMenu(false); setShowSortBuilder(true); }} onClose={() => setShowSettingsMenu(false)} /> : null}
             </div>
-            <CircleButton active={headerCollapsed} icon={headerCollapsed ? ChevronUp : ChevronDown} label={headerCollapsed ? "Expand company header" : "Collapse company header"} onClick={() => setHeaderCollapsed((collapsed) => !collapsed)} />
+            <CircleButton active={headerCollapsed} icon={headerCollapsed ? ChevronUp : ChevronDown} label={headerCollapsed ? "Expand account header" : "Collapse account header"} onClick={() => setHeaderCollapsed((collapsed) => !collapsed)} />
           </div>
         </div>
 
         {filtersVisible && filterGroup.children.length ? <div className="flex flex-wrap items-center gap-2 border-b border-[#dbe4ed] pb-3 text-sm font-semibold text-[#213343]">{filterGroup.children.map((child, index) => child.type === "group" ? null : <button className="rounded-full border border-[#ffb8a5] bg-[#fff1eb] px-3 py-1.5 text-[#c24126]" key={child.id} type="button" onClick={() => setFilterGroup((current) => ({ ...current, children: current.children.filter((_, childIndex) => childIndex !== index) }))}>{child.association}: {child.field} ×</button>)}<button className="font-semibold text-[#ff5c35]" type="button" onClick={() => setFilterGroup({ type: "group", logic: "AND", children: [] })}>Clear all</button></div> : null}
 
-        {loading ? <div className="p-10 text-center text-[#516f90]">Loading companies...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : viewMode === "table" ? <CompaniesTable companies={visibleCompanies} onEdit={(company) => { setEditingCompany(company); setShowCompanyForm(true); }} onRefresh={loadCompanies} activityFilterOpen={activityFilterOpen} setActivityFilterOpen={setActivityFilterOpen} activityRange={activityRange} setActivityRange={setActivityRange} activityOperator={activityOperator} setActivityOperator={setActivityOperator} activityStart={activityStart} setActivityStart={setActivityStart} activityEnd={activityEnd} setActivityEnd={setActivityEnd} /> : <CompaniesBoard board={board} onMoveCard={moveCard} onReorderCard={reorderCard} onReorderColumns={reorderColumns} onAddCompany={(column) => { setNewCompanyStage(column); setShowCompanyForm(true); }} />}
+        {loading ? <div className="p-10 text-center text-[#516f90]">Loading accounts...</div> : error ? <div className="p-10 text-center text-[#b42318]">{error}</div> : viewMode === "table" ? <CompaniesTable companies={visibleCompanies} onEdit={(company) => { setEditingCompany(company); setShowCompanyForm(true); }} onRefresh={loadCompanies} activityFilterOpen={activityFilterOpen} setActivityFilterOpen={setActivityFilterOpen} activityRange={activityRange} setActivityRange={setActivityRange} activityOperator={activityOperator} setActivityOperator={setActivityOperator} activityStart={activityStart} setActivityStart={setActivityStart} activityEnd={activityEnd} setActivityEnd={setActivityEnd} /> : <CompaniesBoard board={board} onMoveCard={moveCard} onReorderCard={reorderCard} onReorderColumns={reorderColumns} onAddCompany={(column) => { setNewCompanyStage(column); setShowCompanyForm(true); }} />}
       </div>
         {showCompanyForm ? <CompanyForm modal editCompany={editingCompany ?? undefined} lifecycleStage={newCompanyStage} onClose={() => { setShowCompanyForm(false); setEditingCompany(null); }} onSaved={() => { setShowCompanyForm(false); setEditingCompany(null); void loadCompanies(); }} /> : null}
     </AppShell>

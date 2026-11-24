@@ -76,7 +76,7 @@ export class CompaniesService {
     const [data, total] = await this.prisma.$transaction([this.prisma.company.findMany({
       where,
       select: {
-        id: true, name: true, industry: true, website: true, phone: true,
+        id: true, accountNumber: true, name: true, industry: true, website: true, phone: true,
         city: true, state: true, country: true, regions: true,
         customerType: true, companySize: true, annualRevenue: true, customerSince: true,
         parentCompanyId: true, ownerId: true, ownerName: true, createdById: true, lifecycleStage: true, marketType: true, isArchived: true,

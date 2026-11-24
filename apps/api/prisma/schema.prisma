@@ -84,6 +84,7 @@ model RolePermission {
 
 model Company {
   id                         String    @id @default(cuid())
+  accountNumber              Int       @unique
   name                       String
   industry                   String?
   website                    String?

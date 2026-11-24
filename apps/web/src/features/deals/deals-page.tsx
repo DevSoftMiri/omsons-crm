@@ -1,9 +1,9 @@
-"use client";
+'use client';
 /* eslint-disable no-irregular-whitespace */
 
-import { AppShell } from "@/components/layout/app-shell";
-import { CrmPageFrame, ViewToggle } from "@/components/ui/crm-page-template";
-import { createHeaders, createIdempotencyKey } from "@/lib/idempotency";
+import { AppShell } from '@/components/layout/app-shell';
+import { CrmPageFrame, ViewToggle } from '@/components/ui/crm-page-template';
+import { createHeaders, createIdempotencyKey } from '@/lib/idempotency';
 import {
   CalendarCheck,
   CalendarDays,
@@ -24,12 +24,12 @@ import {
   StickyNote,
   ContactRound,
   UserRound,
-} from "lucide-react";
-import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { SortMenu, type SortDirection } from "@/components/ui/sort-menu";
-import { sortRecords } from "@/components/ui/sort-records";
+} from 'lucide-react';
+import Image from 'next/image';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { SortMenu, type SortDirection } from '@/components/ui/sort-menu';
+import { sortRecords } from '@/components/ui/sort-records';
 
 type Deal = {
   id: string;
@@ -59,8 +59,23 @@ type PipelineStage = {
   probability?: number | null;
 };
 type Pipeline = { id: string; name: string; stages: PipelineStage[] };
-type CompanyOption = { id: string; name: string; isArchived?: boolean; ownerName?: string | null; owner?: { id: string; name: string } | null; industry?: string | null; city?: string | null; state?: string | null };
-type ContactOption = { id: string; firstName: string; lastName?: string | null; email?: string | null; companyId?: string | null };
+type CompanyOption = {
+  id: string;
+  name: string;
+  isArchived?: boolean;
+  ownerName?: string | null;
+  owner?: { id: string; name: string } | null;
+  industry?: string | null;
+  city?: string | null;
+  state?: string | null;
+};
+type ContactOption = {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  companyId?: string | null;
+};
 type CatalogVariant = {
   id: string;
   sku: string;
@@ -86,55 +101,55 @@ type DealLineItem = {
   quantity: number;
   total: number;
 };
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
 const dealSortOptions = [
-  { value: "name", label: "Lead name" },
-  { value: "amount", label: "Lead amount" },
-  { value: "stage", label: "Lead stage" },
-  { value: "owner", label: "Lead owner" },
-  { value: "createdAt", label: "Create date" },
-  { value: "lastActivityAt", label: "Last activity date" },
-  { value: "closeDate", label: "Close date" },
-  { value: "expectedCloseDate", label: "Expected close date" },
-  { value: "priority", label: "Lead priority" },
-  { value: "pipeline", label: "Pipeline" },
-  { value: "dealType", label: "Lead type" },
-  { value: "company", label: "Account name" },
-  { value: "contact", label: "Contact name" },
-  { value: "probability", label: "Probability" },
-  { value: "weightedAmount", label: "Weighted deal value" },
-  { value: "daysInStage", label: "Days in current stage" },
+  { value: 'name', label: 'Lead name' },
+  { value: 'amount', label: 'Lead amount' },
+  { value: 'stage', label: 'Lead stage' },
+  { value: 'owner', label: 'Lead owner' },
+  { value: 'createdAt', label: 'Create date' },
+  { value: 'lastActivityAt', label: 'Last activity date' },
+  { value: 'closeDate', label: 'Close date' },
+  { value: 'expectedCloseDate', label: 'Expected close date' },
+  { value: 'priority', label: 'Lead priority' },
+  { value: 'pipeline', label: 'Pipeline' },
+  { value: 'dealType', label: 'Lead type' },
+  { value: 'company', label: 'Account name' },
+  { value: 'contact', label: 'Contact name' },
+  { value: 'probability', label: 'Probability' },
+  { value: 'weightedAmount', label: 'Weighted deal value' },
+  { value: 'daysInStage', label: 'Days in current stage' },
 ];
 
 export function DealsPage() {
   const searchParams = useSearchParams();
-  const companyId = searchParams.get("companyId") ?? "";
-  const [viewMode, setViewMode] = useState<"board" | "table">("board");
+  const companyId = searchParams.get('companyId') ?? '';
+  const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
   const [addOpen, setAddOpen] = useState(false);
   const [activeProperty, setActiveProperty] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [dealCount, setDealCount] = useState(0);
-  const [dealName, setDealName] = useState("");
-  const [dealAmount, setDealAmount] = useState("");
+  const [dealName, setDealName] = useState('');
+  const [dealAmount, setDealAmount] = useState('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedContactId, setSelectedContactId] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
   const [companiesLoading, setCompaniesLoading] = useState(false);
-  const [companiesError, setCompaniesError] = useState("");
+  const [companiesError, setCompaniesError] = useState('');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [dealsLoading, setDealsLoading] = useState(true);
   const [dealsRefreshing, setDealsRefreshing] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [createError, setCreateError] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [sortBy, setSortBy] = useState("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [selectedPipelineId, setSelectedPipelineId] = useState("");
+  const [selectedPipelineId, setSelectedPipelineId] = useState('');
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
-  const [pipelineSearch, setPipelineSearch] = useState("");
+  const [pipelineSearch, setPipelineSearch] = useState('');
   const [pipelineManagerOpen, setPipelineManagerOpen] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
 
@@ -146,40 +161,62 @@ export function DealsPage() {
     void fetch(`${API_URL}/companies?limit=100`)
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error("Unable to load companies");
+        if (!response.ok) throw new Error('Unable to load companies');
         return payload;
       })
       .then((payload: unknown) => {
-        const records = Array.isArray(payload) ? payload : (payload as { data?: unknown })?.data;
-        setCompanies(Array.isArray(records) ? (records as CompanyOption[]).filter((company) => !company.isArchived) : []);
-        setCompaniesError("");
+        const records = Array.isArray(payload)
+          ? payload
+          : (payload as { data?: unknown })?.data;
+        setCompanies(
+          Array.isArray(records)
+            ? (records as CompanyOption[]).filter(
+                (company) => !company.isArchived,
+              )
+            : [],
+        );
+        setCompaniesError('');
       })
-      .catch((loadError) => setCompaniesError(loadError instanceof Error ? loadError.message : "Unable to load companies"))
+      .catch((loadError) =>
+        setCompaniesError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Unable to load companies',
+        ),
+      )
       .finally(() => setCompaniesLoading(false));
   }, []);
-  const loadDeals = useCallback(async (pipelineName?: string, signal?: AbortSignal) => {
-    if (deals.length) setDealsRefreshing(true); else setDealsLoading(true);
-    try {
-      const response = await fetch(
-        `${API_URL}/deals?${new URLSearchParams({ ...(pipelineName ? { pipeline: pipelineName } : {}), ...(companyId ? { companyId } : {}) }).toString()}`,
-        { signal },
-      );
-      if (!response.ok) return;
-      const payload = (await response.json()) as unknown;
-      const records = Array.isArray(payload)
-        ? (payload as Deal[])
-        : Array.isArray((payload as { data?: unknown })?.data)
-          ? (payload as { data: Deal[] }).data
-          : [];
-      setDeals(records);
-      setDealCount(records.length);
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
-      /* API may be unavailable while the web app is running alone. */
-    } finally {
-      if (!signal?.aborted) { setDealsLoading(false); setDealsRefreshing(false); }
-    }
-  }, [companyId, deals.length]);
+  const loadDeals = useCallback(
+    async (pipelineName?: string, signal?: AbortSignal) => {
+      if (deals.length) setDealsRefreshing(true);
+      else setDealsLoading(true);
+      try {
+        const response = await fetch(
+          `${API_URL}/deals?${new URLSearchParams({ ...(pipelineName ? { pipeline: pipelineName } : {}), ...(companyId ? { companyId } : {}) }).toString()}`,
+          { signal },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as unknown;
+        const records = Array.isArray(payload)
+          ? (payload as Deal[])
+          : Array.isArray((payload as { data?: unknown })?.data)
+            ? (payload as { data: Deal[] }).data
+            : [];
+        setDeals(records);
+        setDealCount(records.length);
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === 'AbortError')
+          return;
+        /* API may be unavailable while the web app is running alone. */
+      } finally {
+        if (!signal?.aborted) {
+          setDealsLoading(false);
+          setDealsRefreshing(false);
+        }
+      }
+    },
+    [companyId, deals.length],
+  );
 
   useEffect(() => {
     void fetch(`${API_URL}/pipelines`)
@@ -192,7 +229,7 @@ export function DealsPage() {
             : [];
         setPipelines(records);
         const defaultPipeline =
-          records.find((item) => item.name === "Sales Pipeline") ?? records[0];
+          records.find((item) => item.name === 'Sales Pipeline') ?? records[0];
         if (defaultPipeline) {
           setSelectedPipelineId(defaultPipeline.id);
         }
@@ -204,20 +241,25 @@ export function DealsPage() {
     void loadDeals(selectedPipeline?.name, controller.signal);
     return () => controller.abort();
   }, [loadDeals, selectedPipeline?.name]);
-  const sortedDeals = useMemo(() => sortRecords(deals, sortBy, sortDirection, (deal, key) =>
-    key === "owner"
-      ? deal.owner?.name
-      : key === "company"
-        ? deal.company?.name
-        : key === "contact"
-          ? `${deal.contact?.firstName ?? ""} ${deal.contact?.lastName ?? ""}`
-          : key === "weightedAmount"
-            ? (deal.amount ?? 0) * ((deal.probability ?? 0) / 100)
-            : key === "daysInStage"
-              ? deal.stageChangedAt
-                ? Date.now() - new Date(deal.stageChangedAt).getTime()
-                : null
-              : deal[key as keyof Deal]), [deals, sortBy, sortDirection]);
+  const sortedDeals = useMemo(
+    () =>
+      sortRecords(deals, sortBy, sortDirection, (deal, key) =>
+        key === 'owner'
+          ? deal.owner?.name
+          : key === 'company'
+            ? deal.company?.name
+            : key === 'contact'
+              ? `${deal.contact?.firstName ?? ''} ${deal.contact?.lastName ?? ''}`
+              : key === 'weightedAmount'
+                ? (deal.amount ?? 0) * ((deal.probability ?? 0) / 100)
+                : key === 'daysInStage'
+                  ? deal.stageChangedAt
+                    ? Date.now() - new Date(deal.stageChangedAt).getTime()
+                    : null
+                  : deal[key as keyof Deal],
+      ),
+    [deals, sortBy, sortDirection],
+  );
 
   return (
     <AppShell>
@@ -241,13 +283,13 @@ export function DealsPage() {
               </button>
               {addOpen ? (
                 <div className="absolute right-0 top-12 z-20 w-56 rounded-xl border border-[#d0d7de] bg-white py-2 text-sm shadow-xl">
-                  {["Create deal", "Import deals", "Create from template"].map(
+                  {['Create deal', 'Import deals', 'Create from template'].map(
                     (item) => (
                       <button
                         className="block w-full px-4 py-2 text-left hover:bg-[#f7f9fb]"
                         key={item}
                         onClick={() =>
-                          item === "Create deal" &&
+                          item === 'Create deal' &&
                           (setCreateOpen(true), setAddOpen(false))
                         }
                         type="button"
@@ -302,7 +344,7 @@ export function DealsPage() {
               />
             </label>
             <button
-              className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? "border-[#ff5c35] bg-[#fff1eb]" : "border-[#dbe4ed] bg-[#f7f9fb]"}`}
+              className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium ${filtersVisible ? 'border-[#ff5c35] bg-[#fff1eb]' : 'border-[#dbe4ed] bg-[#f7f9fb]'}`}
               onClick={() => setFiltersVisible((visible) => !visible)}
               type="button"
             >
@@ -327,7 +369,7 @@ export function DealsPage() {
                 type="button"
                 onClick={() => setPipelineMenuOpen((open) => !open)}
               >
-                {selectedPipeline?.name ?? "Select pipeline"}
+                {selectedPipeline?.name ?? 'Select pipeline'}
                 <ChevronDown className="h-4 w-4" />
               </button>
               {pipelineMenuOpen ? (
@@ -356,7 +398,7 @@ export function DealsPage() {
                       .map((pipeline) => (
                         <button
                           key={pipeline.id}
-                          className={`block w-full px-3 py-2 text-left text-sm ${pipeline.id === selectedPipelineId ? "font-bold text-white" : "text-[#006b70]"}`}
+                          className={`block w-full px-3 py-2 text-left text-sm ${pipeline.id === selectedPipelineId ? 'font-bold text-white' : 'text-[#006b70]'}`}
                           type="button"
                           onClick={() => {
                             setSelectedPipelineId(pipeline.id);
@@ -366,8 +408,8 @@ export function DealsPage() {
                           <span
                             className={
                               pipeline.id === selectedPipelineId
-                                ? "rounded-md bg-[#b4002b] px-2 py-1"
-                                : ""
+                                ? 'rounded-md bg-[#b4002b] px-2 py-1'
+                                : ''
                             }
                           >
                             {pipeline.name}
@@ -397,10 +439,10 @@ export function DealsPage() {
         {filtersVisible ? (
           <div className="relative flex flex-wrap items-center gap-8 border-b border-[#e5e7eb] px-2 pb-4 text-sm font-bold text-[#202020]">
             {[
-              "Lead owner",
-              "Create date",
-              "Last activity date",
-              "Close date",
+              'Lead owner',
+              'Create date',
+              'Last activity date',
+              'Close date',
             ].map((property) => (
               <div className="relative" key={property}>
                 <button
@@ -427,7 +469,7 @@ export function DealsPage() {
           <DealsEmptyState onCreateDeal={() => setCreateOpen(true)} />
         ) : null}
 
-        {viewMode === "board" ? (
+        {viewMode === 'board' ? (
           <DealsBoard
             // The board must preserve the user's drag order. Sorting here would
             // immediately put cards back in alphabetical/property order after a drop.
@@ -448,7 +490,12 @@ export function DealsPage() {
             {dealCount} deals
           </span>
           <div className="flex items-center gap-3">
-            <CircleButton icon={RefreshCw} label="Refresh" onClick={() => void loadDeals(selectedPipeline?.name)} spinning={dealsRefreshing} />
+            <CircleButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => void loadDeals(selectedPipeline?.name)}
+              spinning={dealsRefreshing}
+            />
             <button className="inline-flex items-center gap-2 rounded-full border border-[#dbe4ed] px-5 py-3 text-sm font-bold">
               <Download className="h-4 w-4" />
               Export
@@ -474,10 +521,16 @@ export function DealsPage() {
           setSelectedContactId={setSelectedContactId}
           pipeline={selectedPipeline}
           onCancel={() => {
-            setCreateError("");
+            setCreateError('');
             setCreateOpen(false);
           }}
-          onCreate={async (lineItems, pipelineId, stageId, companyId, createAnother = false) => {
+          onCreate={async (
+            lineItems,
+            pipelineId,
+            stageId,
+            companyId,
+            createAnother = false,
+          ) => {
             if (!dealName.trim()) return;
             try {
               const lineItemsTotal = lineItems.reduce(
@@ -485,14 +538,14 @@ export function DealsPage() {
                 0,
               );
               const response = await fetch(`${API_URL}/deals`, {
-                method: "POST",
+                method: 'POST',
                 headers: createHeaders(createIdempotencyKey()),
                 body: JSON.stringify({
                   name: dealName.trim(),
                   amount:
                     lineItems.length > 0
                       ? lineItemsTotal
-                      : dealAmount === ""
+                      : dealAmount === ''
                         ? null
                         : Number(dealAmount),
                   lineItems,
@@ -511,15 +564,15 @@ export function DealsPage() {
               // as soon as the first deal is successfully created.
               setDeals((currentDeals) => [createdDeal, ...currentDeals]);
               setDealCount((count) => count + 1);
-              setDealName("");
-              setDealAmount("");
-              setSelectedContactId("");
+              setDealName('');
+              setDealAmount('');
+              setSelectedContactId('');
               if (!createAnother) setCreateOpen(false);
             } catch (error) {
               setCreateError(
                 error instanceof Error
                   ? error.message
-                  : "Unable to create deal",
+                  : 'Unable to create deal',
               );
             }
           }}
@@ -583,22 +636,22 @@ function CreateDealModal({
 }) {
   const [editing, setEditing] = useState(false);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
-  const [productSearch, setProductSearch] = useState("");
+  const [productSearch, setProductSearch] = useState('');
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<{
     product: CatalogProduct;
     variant: CatalogVariant;
   } | null>(null);
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState('1');
   const [lineItems, setLineItems] = useState<DealLineItem[]>([]);
-  const [lineItemError, setLineItemError] = useState("");
+  const [lineItemError, setLineItemError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [stageId, setStageId] = useState("");
-  const [companySearch, setCompanySearch] = useState("");
+  const [stageId, setStageId] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
   const [companyOpen, setCompanyOpen] = useState(false);
-  const [companyError, setCompanyError] = useState("");
+  const [companyError, setCompanyError] = useState('');
   const [contacts, setContacts] = useState<ContactOption[]>([]);
-  const [contactSearch, setContactSearch] = useState("");
+  const [contactSearch, setContactSearch] = useState('');
   const [contactOpen, setContactOpen] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
   const lineItemRef = useRef<HTMLDivElement>(null);
@@ -610,17 +663,21 @@ function CreateDealModal({
   useEffect(() => {
     if (!selectedCompanyId) {
       setContacts([]);
-      setContactSearch("");
+      setContactSearch('');
       setContactOpen(false);
-      setSelectedContactId("");
+      setSelectedContactId('');
       return;
     }
     setContactsLoading(true);
-    void fetch(`${API_URL}/contacts?companyId=${encodeURIComponent(selectedCompanyId)}`)
+    void fetch(
+      `${API_URL}/contacts?companyId=${encodeURIComponent(selectedCompanyId)}`,
+    )
       .then((response) => response.json())
       .then((payload: unknown) => {
-        const records = Array.isArray(payload) ? payload : (payload as { data?: unknown })?.data;
-        setContacts(Array.isArray(records) ? records as ContactOption[] : []);
+        const records = Array.isArray(payload)
+          ? payload
+          : (payload as { data?: unknown })?.data;
+        setContacts(Array.isArray(records) ? (records as ContactOption[]) : []);
       })
       .catch(() => setContacts([]))
       .finally(() => setContactsLoading(false));
@@ -650,22 +707,19 @@ function CreateDealModal({
       if (contactRef.current && !contactRef.current.contains(target)) {
         setContactOpen(false);
       }
-      if (
-        lineItemRef.current &&
-        !lineItemRef.current.contains(target)
-      ) {
+      if (lineItemRef.current && !lineItemRef.current.contains(target)) {
         setSuggestionsOpen(false);
       }
     };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
   }, []);
   const matches = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
     if (!query) return [];
     return catalog
       .filter((product) =>
-        `${product.name} ${product.sku} ${(product.variants ?? []).map((item) => item.sku).join(" ")}`
+        `${product.name} ${product.sku} ${(product.variants ?? []).map((item) => item.sku).join(' ')}`
           .toLowerCase()
           .includes(query),
       )
@@ -676,17 +730,38 @@ function CreateDealModal({
     Number(selectedVariant?.variant.priceLabel ?? 0);
   const parsedQuantity = Number(quantity);
   const lineTotal = unitPrice * parsedQuantity;
-  const selectedCompany = companies.find((company) => company.id === selectedCompanyId);
-  const selectedCompanyOwner = selectedCompany?.owner?.name || selectedCompany?.ownerName || "No owner assigned";
+  const selectedCompany = companies.find(
+    (company) => company.id === selectedCompanyId,
+  );
+  const selectedCompanyOwner =
+    selectedCompany?.owner?.name ||
+    selectedCompany?.ownerName ||
+    'No owner assigned';
   const companyMatches = companies.filter((company) => {
-    const searchText = [company.name, company.owner?.name, company.ownerName, company.industry, company.city, company.state].filter(Boolean).join(" ").toLowerCase();
+    const searchText = [
+      company.name,
+      company.owner?.name,
+      company.ownerName,
+      company.industry,
+      company.city,
+      company.state,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
     return searchText.includes(companySearch.trim().toLowerCase());
   });
   const contactMatches = contacts.filter((contact) =>
-    `${contact.firstName} ${contact.lastName ?? ""} ${contact.email ?? ""}`.toLowerCase().includes(contactSearch.trim().toLowerCase()),
+    `${contact.firstName} ${contact.lastName ?? ''} ${contact.email ?? ''}`
+      .toLowerCase()
+      .includes(contactSearch.trim().toLowerCase()),
   );
-  const selectedContact = contacts.find((contact) => contact.id === selectedContactId);
-  const contactLabel = selectedContact ? `${selectedContact.firstName} ${selectedContact.lastName ?? ""}`.trim() : "";
+  const selectedContact = contacts.find(
+    (contact) => contact.id === selectedContactId,
+  );
+  const contactLabel = selectedContact
+    ? `${selectedContact.firstName} ${selectedContact.lastName ?? ''}`.trim()
+    : '';
   const addLineItem = () => {
     if (
       !selectedVariant ||
@@ -694,7 +769,7 @@ function CreateDealModal({
       parsedQuantity < 1
     ) {
       setLineItemError(
-        "Select a product variant and enter a quantity of at least 1.",
+        'Select a product variant and enter a quantity of at least 1.',
       );
       return;
     }
@@ -711,13 +786,13 @@ function CreateDealModal({
       },
     ]);
     setSelectedVariant(null);
-    setProductSearch("");
-    setQuantity("1");
+    setProductSearch('');
+    setQuantity('1');
     setSuggestionsOpen(false);
-    setLineItemError("");
+    setLineItemError('');
   };
   const money = (value: number) =>
-    `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+    `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
   const field = (label: string, children: React.ReactNode) => (
     <label className="block text-sm font-semibold text-[#213343]">
       <span className="mb-1.5 block">{label}</span>
@@ -725,7 +800,7 @@ function CreateDealModal({
     </label>
   );
   const input =
-    "h-10 w-full rounded-lg border border-[#b8c5d1] bg-white px-3 text-sm outline-none focus:border-[#005c5f]";
+    'h-10 w-full rounded-lg border border-[#b8c5d1] bg-white px-3 text-sm outline-none focus:border-[#005c5f]';
   return (
     <div
       className="fixed inset-0 z-50 flex h-dvh items-center justify-center overflow-hidden bg-black/30 p-2 sm:p-4"
@@ -741,9 +816,21 @@ function CreateDealModal({
           if (submitting) return;
           setSubmitting(true);
           if (!pipeline?.id || !stageId) return;
-          if (!selectedCompanyId) { setCompanyError("Please select a company before creating the deal."); setSubmitting(false); return; }
+          if (!selectedCompanyId) {
+            setCompanyError(
+              'Please select a company before creating the deal.',
+            );
+            setSubmitting(false);
+            return;
+          }
           try {
-            await onCreate(lineItems, pipeline.id, stageId, selectedCompanyId, false);
+            await onCreate(
+              lineItems,
+              pipeline.id,
+              stageId,
+              selectedCompanyId,
+              false,
+            );
           } finally {
             setSubmitting(false);
           }
@@ -757,7 +844,7 @@ function CreateDealModal({
               onClick={() => setEditing((value) => !value)}
               type="button"
             >
-              {editing ? "Done editing" : "Edit form"}
+              {editing ? 'Done editing' : 'Edit form'}
             </button>
             <button
               className="rounded-md px-2 text-2xl leading-none text-[#516f90] hover:bg-[#f1f5f9]"
@@ -782,211 +869,352 @@ function CreateDealModal({
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-          {field(
-            "Lead name",
-            <input
-              className={input}
-              required
-              value={dealName}
-              onChange={(event) => setDealName(event.target.value)}
-            />,
-          )}
-          <div ref={companyRef} className="relative min-w-0 sm:col-span-2">
-            {field("Account", <input className={input} placeholder={companiesLoading ? "Loading companies..." : "Search companies"} value={companySearch || selectedCompany?.name || ""} onFocus={() => setCompanyOpen(true)} onChange={(event) => { setCompanySearch(event.target.value); setCompanyOpen(true); setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanyError(""); }} />)}
-            {selectedCompanyId ? <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#516f90]"><span>Owner: <strong className="text-[#213343]">{selectedCompanyOwner}</strong></span><button className="font-semibold text-[#b42318] hover:underline" type="button" onClick={() => { setSelectedCompanyId(""); setSelectedContactId(""); setContactSearch(""); setCompanySearch(""); setCompanyOpen(false); setCompanyError(""); }}>Clear company</button></div> : null}
-            {companyOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">{companyMatches.map((company) => { const owner = company.owner?.name || company.ownerName || "No owner assigned"; const context = [company.industry, [company.city, company.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "); return <button className="flex w-full min-w-0 items-center gap-1.5 rounded px-3 py-2 text-left text-xs hover:bg-[#f7f9fb]" type="button" key={company.id} onClick={() => { setSelectedCompanyId(company.id); setCompanySearch(company.name); setCompanyOpen(false); setCompanyError(""); }}><span className="min-w-0 truncate font-semibold text-[#213343]">{company.name}</span><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#516f90]">Owner: {owner}</span>{context ? <><span className="shrink-0 text-[#9aabbc]">·</span><span className="min-w-0 truncate text-[#8293a6]">{context}</span></> : null}</button>; })}{!companyMatches.length && !companiesLoading ? <p className="px-3 py-2 text-sm text-[#b42318]">{companiesError || "No companies found"}</p> : null}</div> : null}
-            {companyError ? <p className="mt-1 text-xs text-red-700">{companyError}</p> : null}
-          </div>
-          {field(
-            "Pipeline",
-            <select className={input} value={pipeline?.id ?? ""} disabled>
-              <option value={pipeline?.id}>
-                {pipeline?.name ?? "Select pipeline"}
-              </option>
-            </select>,
-          )}
-          {field(
-            "Lead stage",
-            <select
-              className={input}
-              value={stageId}
-              onChange={(event) => setStageId(event.target.value)}
-              required
-            >
-              {availableStages.map((stage) => (
-                <option value={stage.id} key={stage.id}>
-                  {stage.name}
-                </option>
-              ))}
-            </select>,
-          )}
-          {field(
-            "Amount",
-            <input
-              className={input}
-              min="0"
-              type="number"
-              value={dealAmount}
-              onChange={(event) => setDealAmount(event.target.value)}
-            />,
-          )}
-          {field("Close date", <input className={input} type="date" />)}
-          {field(
-            "Lead owner",
-            <select className={input}>
-              <option>Soft Dev</option>
-            </select>,
-          )}
-          {field(
-            "Lead type",
-            <select className={input}>
-              <option>Select deal type</option>
-              <option>New Business</option>
-              <option>Existing Business</option>
-            </select>,
-          )}
-          {field(
-            "Priority",
-            <select className={input}>
-              <option>Select priority</option>
-              <option>High</option>
-              <option>Medium</option>
-              <option>Low</option>
-            </select>,
-          )}
-          <div ref={contactRef} className="relative min-w-0">
-            {field("Contact", <input className={input} placeholder={contactsLoading ? "Loading contacts..." : "Search contacts"} value={contactSearch || contactLabel} disabled={!selectedCompanyId} onFocus={() => setContactOpen(true)} onChange={(event) => { setContactSearch(event.target.value); setContactOpen(true); setSelectedContactId(""); }} />)}
-            {selectedCompanyId && contactOpen ? <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">{contactMatches.map((contact) => <button className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]" type="button" key={contact.id} onClick={() => { setSelectedContactId(contact.id); setContactSearch(`${contact.firstName} ${contact.lastName ?? ""}`.trim()); setContactOpen(false); }}><span className="block font-semibold text-[#213343]">{`${contact.firstName} ${contact.lastName ?? ""}`.trim()}</span>{contact.email ? <span className="block text-xs text-[#718096]">{contact.email}</span> : null}</button>)}{!contactMatches.length && !contactsLoading ? <p className="px-3 py-2 text-sm text-[#718096]">No contacts for this company</p> : null}</div> : null}
-          </div>
-          <div className="min-w-0 sm:col-span-2">
-            <h3 className="mb-3 text-sm font-bold">Add line item</h3>
-            <div
-              className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
-              ref={lineItemRef}
-            >
-              <div className="relative min-w-0">
-                <input
-                  className={input}
-                  placeholder="Search product or SKU"
-                  value={productSearch}
-                  onChange={(event) => {
-                    setProductSearch(event.target.value);
-                    setSelectedVariant(null);
-                    setSuggestionsOpen(true);
-                  }}
-                  onFocus={() => setSuggestionsOpen(true)}
-                />
-                {suggestionsOpen && matches.length > 0 ? (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">
-                    {matches.map((product) => (
-                      <div key={product.id}>
-                        <p className="px-3 py-2 text-xs font-bold text-[#718096]">
-                          {product.name} · {product.sku}
-                        </p>
-                        {(product.variants ?? []).map((variant) => (
-                          <button
-                            className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-[#f2f7fa]"
-                            key={variant.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedVariant({ product, variant });
-                              setProductSearch(
-                                `${product.name} · ${variant.sku}`,
-                              );
-                              setSuggestionsOpen(false);
-                              setLineItemError("");
-                            }}
-                          >
-                            <span>
-                              {variant.sku}
-                              {variant.pack ? ` · Pack ${variant.pack}` : ""}
-                            </span>
-                            <span className="font-semibold">
-                              {money(
-                                variant.price ??
-                                  Number(variant.priceLabel ?? 0),
-                              )}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+            {field(
+              'Lead name',
               <input
                 className={input}
-                min="1"
-                placeholder="Quantity"
-                type="number"
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-              />
-              <button
-                className="rounded-lg border border-[#b8c5d1] px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={
-                  !selectedVariant ||
-                  !Number.isInteger(parsedQuantity) ||
-                  parsedQuantity < 1
-                }
-                onClick={addLineItem}
-                type="button"
-              >
-                Add
-              </button>
-            </div>
-            {selectedVariant ? (
-              <p className="mt-2 text-sm text-[#516f90]">
-                Unit price: <strong>{money(unitPrice)}</strong> · Amount:{" "}
-                <strong>{money(lineTotal)}</strong>
-              </p>
-            ) : null}
-            {lineItemError ? (
-              <p className="mt-2 text-sm text-red-600">{lineItemError}</p>
-            ) : null}
-            {lineItems.length > 0 ? (
-              <div className="mt-3 divide-y rounded-lg border border-[#dbe4ed]">
-                {lineItems.map((item, index) => (
-                  <div
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                    key={`${item.variantId}-${index}`}
+                required
+                value={dealName}
+                onChange={(event) => setDealName(event.target.value)}
+              />,
+            )}
+            <div ref={companyRef} className="relative min-w-0 sm:col-span-2">
+              {field(
+                'Account',
+                <input
+                  className={input}
+                  placeholder={
+                    companiesLoading
+                      ? 'Loading companies...'
+                      : 'Search companies'
+                  }
+                  value={companySearch || selectedCompany?.name || ''}
+                  onFocus={() => setCompanyOpen(true)}
+                  onChange={(event) => {
+                    setCompanySearch(event.target.value);
+                    setCompanyOpen(true);
+                    setSelectedCompanyId('');
+                    setSelectedContactId('');
+                    setContactSearch('');
+                    setCompanyError('');
+                  }}
+                />,
+              )}
+              {selectedCompanyId ? (
+                <div className="mt-1 flex items-center justify-between gap-2 text-xs text-[#516f90]">
+                  <span>
+                    Owner:{' '}
+                    <strong className="text-[#213343]">
+                      {selectedCompanyOwner}
+                    </strong>
+                  </span>
+                  <button
+                    className="font-semibold text-[#b42318] hover:underline"
+                    type="button"
+                    onClick={() => {
+                      setSelectedCompanyId('');
+                      setSelectedContactId('');
+                      setContactSearch('');
+                      setCompanySearch('');
+                      setCompanyOpen(false);
+                      setCompanyError('');
+                    }}
                   >
-                    <div>
-                      <p className="font-semibold">{item.productName}</p>
-                      <p className="text-xs text-[#718096]">
-                        {item.variantSku} · {money(item.unitPrice)} ×{" "}
-                        {item.quantity}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <strong>{money(item.total)}</strong>
+                    Clear company
+                  </button>
+                </div>
+              ) : null}
+              {companyOpen ? (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">
+                  {companyMatches.map((company) => {
+                    const owner =
+                      company.owner?.name ||
+                      company.ownerName ||
+                      'No owner assigned';
+                    const context = [
+                      company.industry,
+                      [company.city, company.state].filter(Boolean).join(', '),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
+                    return (
                       <button
-                        className="text-[#b42318]"
+                        className="flex w-full min-w-0 items-center gap-1.5 rounded px-3 py-2 text-left text-xs hover:bg-[#f7f9fb]"
                         type="button"
-                        onClick={() =>
-                          setLineItems((current) =>
-                            current.filter(
-                              (_, itemIndex) => itemIndex !== index,
-                            ),
-                          )
-                        }
+                        key={company.id}
+                        onClick={() => {
+                          setSelectedCompanyId(company.id);
+                          setCompanySearch(company.name);
+                          setCompanyOpen(false);
+                          setCompanyError('');
+                        }}
                       >
-                        Remove
+                        <span className="min-w-0 truncate font-semibold text-[#213343]">
+                          {company.name}
+                        </span>
+                        <span className="shrink-0 text-[#9aabbc]">·</span>
+                        <span className="min-w-0 truncate text-[#516f90]">
+                          Owner: {owner}
+                        </span>
+                        {context ? (
+                          <>
+                            <span className="shrink-0 text-[#9aabbc]">·</span>
+                            <span className="min-w-0 truncate text-[#8293a6]">
+                              {context}
+                            </span>
+                          </>
+                        ) : null}
                       </button>
-                    </div>
-                  </div>
+                    );
+                  })}
+                  {!companyMatches.length && !companiesLoading ? (
+                    <p className="px-3 py-2 text-sm text-[#b42318]">
+                      {companiesError || 'No companies found'}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {companyError ? (
+                <p className="mt-1 text-xs text-red-700">{companyError}</p>
+              ) : null}
+            </div>
+            {field(
+              'Pipeline',
+              <select className={input} value={pipeline?.id ?? ''} disabled>
+                <option value={pipeline?.id}>
+                  {pipeline?.name ?? 'Select pipeline'}
+                </option>
+              </select>,
+            )}
+            {field(
+              'Lead stage',
+              <select
+                className={input}
+                value={stageId}
+                onChange={(event) => setStageId(event.target.value)}
+                required
+              >
+                {availableStages.map((stage) => (
+                  <option value={stage.id} key={stage.id}>
+                    {stage.name}
+                  </option>
                 ))}
+              </select>,
+            )}
+            {field(
+              'Amount',
+              <input
+                className={input}
+                min="0"
+                type="number"
+                value={dealAmount}
+                onChange={(event) => setDealAmount(event.target.value)}
+              />,
+            )}
+            {field('Close date', <input className={input} type="date" />)}
+            {field(
+              'Lead owner',
+              <select className={input}>
+                <option>Soft Dev</option>
+              </select>,
+            )}
+            {field(
+              'Lead type',
+              <select className={input}>
+                <option>Select deal type</option>
+                <option>New Business</option>
+                <option>Existing Business</option>
+              </select>,
+            )}
+            {field(
+              'Priority',
+              <select className={input}>
+                <option>Select priority</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>,
+            )}
+            <div ref={contactRef} className="relative min-w-0">
+              {field(
+                'Contact',
+                <input
+                  className={input}
+                  placeholder={
+                    contactsLoading ? 'Loading contacts...' : 'Search contacts'
+                  }
+                  value={contactSearch || contactLabel}
+                  disabled={!selectedCompanyId}
+                  onFocus={() => setContactOpen(true)}
+                  onChange={(event) => {
+                    setContactSearch(event.target.value);
+                    setContactOpen(true);
+                    setSelectedContactId('');
+                  }}
+                />,
+              )}
+              {selectedCompanyId && contactOpen ? (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">
+                  {contactMatches.map((contact) => (
+                    <button
+                      className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-[#f7f9fb]"
+                      type="button"
+                      key={contact.id}
+                      onClick={() => {
+                        setSelectedContactId(contact.id);
+                        setContactSearch(
+                          `${contact.firstName} ${contact.lastName ?? ''}`.trim(),
+                        );
+                        setContactOpen(false);
+                      }}
+                    >
+                      <span className="block font-semibold text-[#213343]">
+                        {`${contact.firstName} ${contact.lastName ?? ''}`.trim()}
+                      </span>
+                      {contact.email ? (
+                        <span className="block text-xs text-[#718096]">
+                          {contact.email}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                  {!contactMatches.length && !contactsLoading ? (
+                    <p className="px-3 py-2 text-sm text-[#718096]">
+                      No contacts for this company
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              <h3 className="mb-3 text-sm font-bold">Add line item</h3>
+              <div
+                className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
+                ref={lineItemRef}
+              >
+                <div className="relative min-w-0">
+                  <input
+                    className={input}
+                    placeholder="Search product or SKU"
+                    value={productSearch}
+                    onChange={(event) => {
+                      setProductSearch(event.target.value);
+                      setSelectedVariant(null);
+                      setSuggestionsOpen(true);
+                    }}
+                    onFocus={() => setSuggestionsOpen(true)}
+                  />
+                  {suggestionsOpen && matches.length > 0 ? (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-[#b8c5d1] bg-white p-1 shadow-xl">
+                      {matches.map((product) => (
+                        <div key={product.id}>
+                          <p className="px-3 py-2 text-xs font-bold text-[#718096]">
+                            {product.name} · {product.sku}
+                          </p>
+                          {(product.variants ?? []).map((variant) => (
+                            <button
+                              className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-[#f2f7fa]"
+                              key={variant.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedVariant({ product, variant });
+                                setProductSearch(
+                                  `${product.name} · ${variant.sku}`,
+                                );
+                                setSuggestionsOpen(false);
+                                setLineItemError('');
+                              }}
+                            >
+                              <span>
+                                {variant.sku}
+                                {variant.pack ? ` · Pack ${variant.pack}` : ''}
+                              </span>
+                              <span className="font-semibold">
+                                {money(
+                                  variant.price ??
+                                    Number(variant.priceLabel ?? 0),
+                                )}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <input
+                  className={input}
+                  min="1"
+                  placeholder="Quantity"
+                  type="number"
+                  value={quantity}
+                  onChange={(event) => setQuantity(event.target.value)}
+                />
+                <button
+                  className="rounded-lg border border-[#b8c5d1] px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    !selectedVariant ||
+                    !Number.isInteger(parsedQuantity) ||
+                    parsedQuantity < 1
+                  }
+                  onClick={addLineItem}
+                  type="button"
+                >
+                  Add
+                </button>
               </div>
-            ) : null}
-            {lineItems.length > 0 ? (
-              <p className="mt-2 text-right text-sm font-bold">
-                Line items total:{" "}
-                {money(
-                  lineItems.reduce((total, item) => total + item.total, 0),
-                )}
-              </p>
-            ) : null}
-          </div>
+              {selectedVariant ? (
+                <p className="mt-2 text-sm text-[#516f90]">
+                  Unit price: <strong>{money(unitPrice)}</strong> · Amount:{' '}
+                  <strong>{money(lineTotal)}</strong>
+                </p>
+              ) : null}
+              {lineItemError ? (
+                <p className="mt-2 text-sm text-red-600">{lineItemError}</p>
+              ) : null}
+              {lineItems.length > 0 ? (
+                <div className="mt-3 divide-y rounded-lg border border-[#dbe4ed]">
+                  {lineItems.map((item, index) => (
+                    <div
+                      className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                      key={`${item.variantId}-${index}`}
+                    >
+                      <div>
+                        <p className="font-semibold">{item.productName}</p>
+                        <p className="text-xs text-[#718096]">
+                          {item.variantSku} · {money(item.unitPrice)} ×{' '}
+                          {item.quantity}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <strong>{money(item.total)}</strong>
+                        <button
+                          className="text-[#b42318]"
+                          type="button"
+                          onClick={() =>
+                            setLineItems((current) =>
+                              current.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {lineItems.length > 0 ? (
+                <p className="mt-2 text-right text-sm font-bold">
+                  Line items total:{' '}
+                  {money(
+                    lineItems.reduce((total, item) => total + item.total, 0),
+                  )}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[#e1e7ed] bg-white px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
@@ -1002,7 +1230,7 @@ function CreateDealModal({
             disabled={submitting}
             type="submit"
           >
-            {submitting ? "Creating..." : "Create"}
+            {submitting ? 'Creating...' : 'Create'}
           </button>
           <button
             className="rounded-full border border-[#005c5f] px-5 py-2.5 text-sm font-bold text-[#005c5f]"
@@ -1011,8 +1239,19 @@ function CreateDealModal({
               if (submitting || !pipeline?.id || !stageId) return;
               setSubmitting(true);
               try {
-                if (!selectedCompanyId) { setCompanyError("Please select a company before creating the deal."); return; }
-                await onCreate(lineItems, pipeline.id, stageId, selectedCompanyId, true);
+                if (!selectedCompanyId) {
+                  setCompanyError(
+                    'Please select a company before creating the deal.',
+                  );
+                  return;
+                }
+                await onCreate(
+                  lineItems,
+                  pipeline.id,
+                  stageId,
+                  selectedCompanyId,
+                  true,
+                );
               } finally {
                 setSubmitting(false);
               }
@@ -1029,11 +1268,65 @@ function CreateDealModal({
 
 function ConfettiCelebration({ trigger }: { trigger: number }) {
   const [visible, setVisible] = useState(false);
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const particles = useMemo(() => Array.from({ length: 72 }, (_, index) => ({ id: index, startX: `${(index % 25) * 42 - 500 + ((index * 17) % 30)}px`, color: ["#ff6848", "#1683ff", "#f5b700", "#18a566", "#8b5cf6"][index % 5], delay: `${(index % 9) * 45}ms`, duration: `${1350 + (index % 7) * 120}ms`, width: `${8 + (index % 5) * 1.5}px`, height: `${12 + (index % 5) * 2}px`, shape: index % 3 === 0 ? "999px" : index % 3 === 1 ? "2px" : "1px 4px 1px 4px" })), []);
-  useEffect(() => { if (!trigger || reducedMotion) return; setVisible(true); const timer = window.setTimeout(() => setVisible(false), 2400); return () => window.clearTimeout(timer); }, [trigger, reducedMotion]);
+  const reducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 72 }, (_, index) => ({
+        id: index,
+        startX: `${(index % 25) * 42 - 500 + ((index * 17) % 30)}px`,
+        color: ['#ff6848', '#1683ff', '#f5b700', '#18a566', '#8b5cf6'][
+          index % 5
+        ],
+        delay: `${(index % 9) * 45}ms`,
+        duration: `${1350 + (index % 7) * 120}ms`,
+        width: `${8 + (index % 5) * 1.5}px`,
+        height: `${12 + (index % 5) * 2}px`,
+        shape:
+          index % 3 === 0
+            ? '999px'
+            : index % 3 === 1
+              ? '2px'
+              : '1px 4px 1px 4px',
+      })),
+    [],
+  );
+  useEffect(() => {
+    if (!trigger || reducedMotion) return;
+    setVisible(true);
+    const timer = window.setTimeout(() => setVisible(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [trigger, reducedMotion]);
   if (!visible || reducedMotion) return null;
-  return <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0 overflow-visible"><style>{`@keyframes deal-confetti-fall { 0% { transform: translate3d(var(--start-x), -24px, 0) rotate3d(0.2, 1, 0.1, 0deg) scale(0.65); opacity: 0; } 8% { opacity: 1; } 45% { transform: translate3d(calc(var(--start-x) + var(--drift-half)), 48vh, 0) rotate3d(0.2, 1, 0.1, var(--spin-half)) scale(1); } 100% { transform: translate3d(calc(var(--start-x) + var(--drift)), 104vh, 0) rotate3d(0.2, 1, 0.1, var(--spin)) scale(0.9); opacity: 0; } }`}</style>{particles.map((particle) => <span key={`${trigger}-${particle.id}`} className="absolute left-1/2 top-0 block" style={{ width: particle.width, height: particle.height, borderRadius: particle.shape, backgroundColor: particle.color, boxShadow: `0 0 1px ${particle.color}`, willChange: "transform, opacity", animation: `deal-confetti-fall ${particle.duration} cubic-bezier(.18,.75,.35,1) ${particle.delay} forwards`, ["--start-x" as string]: particle.startX, ["--drift-half" as string]: `${((particle.id % 23) * 45 - 500) / 2}px`, ["--drift" as string]: `${(particle.id % 23) * 45 - 500}px`, ["--spin-half" as string]: `${180 + (particle.id % 5) * 90}deg`, ["--spin" as string]: `${540 + (particle.id % 7) * 180}deg` }} />)}</div>;
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[200] h-0 overflow-visible"
+    >
+      <style>{`@keyframes deal-confetti-fall { 0% { transform: translate3d(var(--start-x), -24px, 0) rotate3d(0.2, 1, 0.1, 0deg) scale(0.65); opacity: 0; } 8% { opacity: 1; } 45% { transform: translate3d(calc(var(--start-x) + var(--drift-half)), 48vh, 0) rotate3d(0.2, 1, 0.1, var(--spin-half)) scale(1); } 100% { transform: translate3d(calc(var(--start-x) + var(--drift)), 104vh, 0) rotate3d(0.2, 1, 0.1, var(--spin)) scale(0.9); opacity: 0; } }`}</style>
+      {particles.map((particle) => (
+        <span
+          key={`${trigger}-${particle.id}`}
+          className="absolute left-1/2 top-0 block"
+          style={{
+            width: particle.width,
+            height: particle.height,
+            borderRadius: particle.shape,
+            backgroundColor: particle.color,
+            boxShadow: `0 0 1px ${particle.color}`,
+            willChange: 'transform, opacity',
+            animation: `deal-confetti-fall ${particle.duration} cubic-bezier(.18,.75,.35,1) ${particle.delay} forwards`,
+            ['--start-x' as string]: particle.startX,
+            ['--drift-half' as string]: `${((particle.id % 23) * 45 - 500) / 2}px`,
+            ['--drift' as string]: `${(particle.id % 23) * 45 - 500}px`,
+            ['--spin-half' as string]: `${180 + (particle.id % 5) * 90}deg`,
+            ['--spin' as string]: `${540 + (particle.id % 7) * 180}deg`,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 function DealsBoard({
@@ -1061,7 +1354,10 @@ function DealsBoard({
     const board = boardRef.current;
     if (!board) return;
     const updateDimensions = () => {
-      setBoardWidth({ content: board.scrollWidth, viewport: board.clientWidth });
+      setBoardWidth({
+        content: board.scrollWidth,
+        viewport: board.clientWidth,
+      });
     };
     updateDimensions();
     const observer = new ResizeObserver(updateDimensions);
@@ -1074,9 +1370,15 @@ function DealsBoard({
     const distanceFromTop = clientY - bounds.top;
     const distanceFromBottom = bounds.bottom - clientY;
     if (distanceFromTop < edge) {
-      element.scrollTop -= Math.max(8, Math.round((edge - distanceFromTop) / 3));
+      element.scrollTop -= Math.max(
+        8,
+        Math.round((edge - distanceFromTop) / 3),
+      );
     } else if (distanceFromBottom < edge) {
-      element.scrollTop += Math.max(8, Math.round((edge - distanceFromBottom) / 3));
+      element.scrollTop += Math.max(
+        8,
+        Math.round((edge - distanceFromBottom) / 3),
+      );
     }
   };
   const moveDeal = async (deal: Deal, stage: string, beforeId?: string) => {
@@ -1099,12 +1401,12 @@ function DealsBoard({
     onDealsChange(reordered);
     try {
       const response = await fetch(`${API_URL}/deals/${deal.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage }),
       });
-      if (!response.ok) throw new Error("Unable to move deal");
-      if (deal.stage !== "Qualified" && stage === "Qualified") onDealWon?.();
+      if (!response.ok) throw new Error('Unable to move deal');
+      if (deal.stage !== 'Qualified' && stage === 'Qualified') onDealWon?.();
     } catch {
       onDealsChange(previous);
     }
@@ -1137,13 +1439,14 @@ function DealsBoard({
           const label = stage.name;
           // Keep the first default stage consistent with the plain headers used
           // by the other deal columns (older pipeline data may store it blue).
-          const color = label === "Appointment Scheduled"
-            ? "bg-transparent text-[#213343]"
-            : stage.color || "bg-[#eeeeee] text-[#333333]";
+          const color =
+            label === 'Appointment Scheduled'
+              ? 'bg-transparent text-[#213343]'
+              : stage.color || 'bg-[#eeeeee] text-[#333333]';
           const probability = stage.probability ?? 0;
           return (
             <div
-              className={`relative flex h-[calc(100vh-245px)] min-h-[360px] w-[290px] min-w-[290px] shrink-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
+              className={`relative flex h-[calc(100vh-245px)] min-h-[360px] w-[290px] min-w-[290px] shrink-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl bg-[#f4f4f4] p-2.5 transition ${dropStage === label ? 'ring-2 ring-[#1683ff] ring-offset-2' : ''}`}
               key={label}
               onDragEnter={() => setDropStage(label)}
               onDragLeave={(event) => {
@@ -1152,14 +1455,14 @@ function DealsBoard({
               }}
               onDragOver={(event) => {
                 event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
+                event.dataTransfer.dropEffect = 'move';
                 setDropStage(label);
                 autoScrollColumn(event.currentTarget, event.clientY);
               }}
               onDrop={(event) => {
                 event.preventDefault();
                 const deal = deals.find(
-                  (item) => item.id === event.dataTransfer.getData("deal-id"),
+                  (item) => item.id === event.dataTransfer.getData('deal-id'),
                 );
                 if (deal) void moveDeal(deal, label);
                 setDropStage(null);
@@ -1182,17 +1485,17 @@ function DealsBoard({
                     key={deal.id}
                     onDragEnter={(event) => {
                       event.stopPropagation();
-                      const draggedId = event.dataTransfer.getData("deal-id");
+                      const draggedId = event.dataTransfer.getData('deal-id');
                       if (draggedId && draggedId !== deal.id)
                         event.currentTarget.classList.add(
-                          "border-t-2",
-                          "border-[#1683ff]",
+                          'border-t-2',
+                          'border-[#1683ff]',
                         );
                     }}
                     onDragLeave={(event) => {
                       event.currentTarget.classList.remove(
-                        "border-t-2",
-                        "border-[#1683ff]",
+                        'border-t-2',
+                        'border-[#1683ff]',
                       );
                     }}
                     onDragOver={(event) => event.preventDefault()}
@@ -1200,32 +1503,32 @@ function DealsBoard({
                       event.preventDefault();
                       event.stopPropagation();
                       event.currentTarget.classList.remove(
-                        "border-t-2",
-                        "border-[#1683ff]",
+                        'border-t-2',
+                        'border-[#1683ff]',
                       );
                       const dragged = deals.find(
                         (item) =>
-                          item.id === event.dataTransfer.getData("deal-id"),
+                          item.id === event.dataTransfer.getData('deal-id'),
                       );
                       if (dragged) void moveDeal(dragged, label, deal.id);
                     }}
                   >
                     <DealCard
-                      companyName={deal.company?.name ?? "--"}
+                      companyName={deal.company?.name ?? '--'}
                       name={deal.name}
                       amount={deal.amount}
                       onCreateTask={onCreateTask}
                       onCreateNote={onCreateNote}
                       onDragStart={(event) => {
-                        event.dataTransfer.setData("deal-id", deal.id);
+                        event.dataTransfer.setData('deal-id', deal.id);
                         const preview = event.currentTarget.cloneNode(
                           true,
                         ) as HTMLElement;
-                        preview.style.position = "fixed";
-                        preview.style.top = "-1000px";
+                        preview.style.position = 'fixed';
+                        preview.style.top = '-1000px';
                         preview.style.width = `${event.currentTarget.offsetWidth}px`;
-                        preview.style.opacity = "1";
-                        preview.style.pointerEvents = "none";
+                        preview.style.opacity = '1';
+                        preview.style.pointerEvents = 'none';
                         document.body.appendChild(preview);
                         event.dataTransfer.setDragImage(preview, 20, 20);
                         window.setTimeout(() => preview.remove(), 0);
@@ -1260,7 +1563,10 @@ function DealsBoard({
             if (board) board.scrollLeft = event.currentTarget.scrollLeft;
           }}
         >
-          <div aria-hidden="true" style={{ width: `${boardWidth.content}px`, height: 1 }} />
+          <div
+            aria-hidden="true"
+            style={{ width: `${boardWidth.content}px`, height: 1 }}
+          />
         </div>
       ) : null}
     </>
@@ -1268,24 +1574,24 @@ function DealsBoard({
 }
 
 const pipelineStageColors = [
-  "bg-[#171717] text-white",
-  "bg-[#b4002b] text-white",
-  "bg-[#c83a00] text-white",
-  "bg-[#f5b82e] text-[#171717]",
-  "bg-[#00843d] text-white",
-  "bg-[#007f7f] text-white",
-  "bg-[#0b6fd3] text-white",
-  "bg-[#7b4de3] text-white",
-  "bg-[#d00082] text-white",
-  "bg-[#eeeeee] text-[#333333]",
-  "bg-[#f8d8d5] text-[#8f1d1d]",
-  "bg-[#f8d6c8] text-[#8f341d]",
-  "bg-[#faecc7] text-[#7a5b16]",
-  "bg-[#d9efdf] text-[#1e6b35]",
-  "bg-[#c8f1f0] text-[#176c6d]",
-  "bg-[#cfe5f3] text-[#255a7a]",
-  "bg-[#dedcf5] text-[#4c4285]",
-  "bg-[#f6d6e5] text-[#8d3e65]",
+  'bg-[#171717] text-white',
+  'bg-[#b4002b] text-white',
+  'bg-[#c83a00] text-white',
+  'bg-[#f5b82e] text-[#171717]',
+  'bg-[#00843d] text-white',
+  'bg-[#007f7f] text-white',
+  'bg-[#0b6fd3] text-white',
+  'bg-[#7b4de3] text-white',
+  'bg-[#d00082] text-white',
+  'bg-[#eeeeee] text-[#333333]',
+  'bg-[#f8d8d5] text-[#8f1d1d]',
+  'bg-[#f8d6c8] text-[#8f341d]',
+  'bg-[#faecc7] text-[#7a5b16]',
+  'bg-[#d9efdf] text-[#1e6b35]',
+  'bg-[#c8f1f0] text-[#176c6d]',
+  'bg-[#cfe5f3] text-[#255a7a]',
+  'bg-[#dedcf5] text-[#4c4285]',
+  'bg-[#f6d6e5] text-[#8d3e65]',
 ];
 
 function PipelineManager({
@@ -1297,14 +1603,14 @@ function PipelineManager({
   onChange: (pipelines: Pipeline[]) => void;
   onClose: () => void;
 }) {
-  const [selectedId, setSelectedId] = useState(pipelines[0]?.id ?? "");
-  const [pipelineName, setPipelineName] = useState("");
-  const [stageName, setStageName] = useState("");
-  const [stageDescription, setStageDescription] = useState("");
+  const [selectedId, setSelectedId] = useState(pipelines[0]?.id ?? '');
+  const [pipelineName, setPipelineName] = useState('');
+  const [stageName, setStageName] = useState('');
+  const [stageDescription, setStageDescription] = useState('');
   const [stageColor, setStageColor] = useState(pipelineStageColors[0]);
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const selected = (Array.isArray(pipelines) ? pipelines : []).find(
     (item) => item.id === selectedId,
   );
@@ -1324,7 +1630,7 @@ function PipelineManager({
   const save = async (request: () => Promise<Response>) => {
     if (saving) return;
     setSaving(true);
-    setError("");
+    setError('');
     try {
       const response = await request();
       if (!response.ok) throw new Error(await response.text());
@@ -1333,7 +1639,7 @@ function PipelineManager({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to save changes",
+          : 'Unable to save changes',
       );
     } finally {
       setSaving(false);
@@ -1359,7 +1665,7 @@ function PipelineManager({
               {pipelines.map((pipeline) => (
                 <button
                   key={pipeline.id}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedId === pipeline.id ? "bg-[#e8f6f7] font-bold text-[#006b70]" : "hover:bg-[#f7f9fb]"}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedId === pipeline.id ? 'bg-[#e8f6f7] font-bold text-[#006b70]' : 'hover:bg-[#f7f9fb]'}`}
                   type="button"
                   onClick={() => setSelectedId(pipeline.id)}
                 >
@@ -1381,12 +1687,12 @@ function PipelineManager({
                 onClick={() =>
                   void save(async () => {
                     const response = await fetch(`${API_URL}/pipelines`, {
-                      method: "POST",
+                      method: 'POST',
                       headers: createHeaders(createIdempotencyKey()),
                       body: JSON.stringify({ name: pipelineName.trim() }),
                     });
                     if (response.ok) {
-                      setPipelineName("");
+                      setPipelineName('');
                       const created = (await response
                         .clone()
                         .json()) as Pipeline;
@@ -1403,7 +1709,7 @@ function PipelineManager({
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-sm font-bold">
-                Stages {selected ? `for ${selected.name}` : ""}
+                Stages {selected ? `for ${selected.name}` : ''}
               </p>
               {selected ? (
                 <button
@@ -1411,12 +1717,12 @@ function PipelineManager({
                   type="button"
                   disabled={saving}
                   onClick={() => {
-                    const name = window.prompt("Pipeline name", selected.name);
+                    const name = window.prompt('Pipeline name', selected.name);
                     if (name?.trim())
                       void save(() =>
                         fetch(`${API_URL}/pipelines/${selected.id}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ name: name.trim() }),
                         }),
                       );
@@ -1434,12 +1740,12 @@ function PipelineManager({
                     key={stage.id}
                   >
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${stage.color || "bg-[#eeeeee] text-[#333333]"}`}
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${stage.color || 'bg-[#eeeeee] text-[#333333]'}`}
                     >
                       {stage.name}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-xs text-[#516f90]">
-                      {stage.description || "No description"}
+                      {stage.description || 'No description'}
                     </span>
                     <button
                       className="text-xs font-semibold text-[#006b70]"
@@ -1448,7 +1754,7 @@ function PipelineManager({
                       onClick={() => {
                         setEditingStageId(stage.id);
                         setStageName(stage.name);
-                        setStageDescription(stage.description || "");
+                        setStageDescription(stage.description || '');
                         setStageColor(stage.color || pipelineStageColors[0]);
                       }}
                     >
@@ -1463,8 +1769,8 @@ function PipelineManager({
                           fetch(
                             `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
                             {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ order: index - 1 }),
                             },
                           ),
@@ -1482,8 +1788,8 @@ function PipelineManager({
                           fetch(
                             `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
                             {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ order: index + 1 }),
                             },
                           ),
@@ -1501,8 +1807,8 @@ function PipelineManager({
                           fetch(
                             `${API_URL}/pipelines/${selected.id}/stages/${stage.id}`,
                             {
-                              method: "DELETE",
-                              headers: { "Content-Type": "application/json" },
+                              method: 'DELETE',
+                              headers: { 'Content-Type': 'application/json' },
                             },
                           ),
                         )
@@ -1514,7 +1820,7 @@ function PipelineManager({
                 ))}
                 <div className="mt-4 rounded-xl border border-[#dbe4ed] p-4">
                   <p className="mb-3 font-bold">
-                    {editingStageId ? "Edit stage" : "Add stage"}
+                    {editingStageId ? 'Edit stage' : 'Add stage'}
                   </p>
                   <div className="grid gap-3">
                     <input
@@ -1535,7 +1841,7 @@ function PipelineManager({
                       {pipelineStageColors.map((color) => (
                         <button
                           key={color}
-                          className={`h-8 w-8 rounded-full border border-[#cbd5e1] ${color} ${stageColor === color ? "ring-2 ring-[#1683ff] ring-offset-2" : ""}`}
+                          className={`h-8 w-8 rounded-full border border-[#cbd5e1] ${color} ${stageColor === color ? 'ring-2 ring-[#1683ff] ring-offset-2' : ''}`}
                           type="button"
                           aria-label={`Use ${color} color`}
                           onClick={() => setStageColor(color)}
@@ -1549,32 +1855,32 @@ function PipelineManager({
                       onClick={() =>
                         void save(async () => {
                           const response = await fetch(
-                            `${API_URL}/pipelines/${selected.id}/stages${editingStageId ? `/${editingStageId}` : ""}`,
+                            `${API_URL}/pipelines/${selected.id}/stages${editingStageId ? `/${editingStageId}` : ''}`,
                             {
-                              method: editingStageId ? "PATCH" : "POST",
+                              method: editingStageId ? 'PATCH' : 'POST',
                               headers: createHeaders(createIdempotencyKey()),
                               body: JSON.stringify({
                                 name: stageName.trim(),
                                 description: stageDescription,
                                 color: stageColor,
                                 order: editingStageId
-                                  ? selectedStages.find(
+                                  ? (selectedStages.find(
                                       (item) => item.id === editingStageId,
-                                    )?.order ?? 0
+                                    )?.order ?? 0)
                                   : selectedStages.length,
                               }),
                             },
                           );
                           if (response.ok) {
-                            setStageName("");
-                            setStageDescription("");
+                            setStageName('');
+                            setStageDescription('');
                             setEditingStageId(null);
                           }
                           return response;
                         })
                       }
                     >
-                      {editingStageId ? "Save" : "Save stage"}
+                      {editingStageId ? 'Save' : 'Save stage'}
                     </button>
                     {editingStageId ? (
                       <button
@@ -1582,8 +1888,8 @@ function PipelineManager({
                         type="button"
                         onClick={() => {
                           setEditingStageId(null);
-                          setStageName("");
-                          setStageDescription("");
+                          setStageName('');
+                          setStageDescription('');
                           setStageColor(pipelineStageColors[0]);
                         }}
                       >
@@ -1668,9 +1974,9 @@ function DealColumnFooter({
   );
   const weightedAmount = totalAmount * (probability / 100);
   const money = (amount: number) =>
-    amount.toLocaleString("en-IN", {
-      style: "currency",
-      currency: "INR",
+    amount.toLocaleString('en-IN', {
+      style: 'currency',
+      currency: 'INR',
       maximumFractionDigits: 2,
     });
 
@@ -1681,7 +1987,7 @@ function DealColumnFooter({
       </div>
       <div>
         <strong>{money(weightedAmount)}</strong> ({probability}%) | Weighted
-        amount{" "}
+        amount{' '}
         <Info
           className="inline-block h-4 w-4 align-[-3px] text-[#666]"
           aria-label="Weighted amount information"
@@ -1732,8 +2038,18 @@ function DealCard({
       draggable
       onDragStart={onDragStart}
     >
-      <h3 className="truncate text-sm font-bold text-[#006b70]" title={companyName}>{companyName}</h3>
-      <p className="mt-1 truncate text-sm font-semibold text-[#213343]" title={name}>{name}</p>
+      <h3
+        className="truncate text-sm font-bold text-[#006b70]"
+        title={companyName}
+      >
+        {companyName}
+      </h3>
+      <p
+        className="mt-1 truncate text-sm font-semibold text-[#213343]"
+        title={name}
+      >
+        {name}
+      </p>
       <DealFieldTooltip label="Create Date: 10/16/2026 10:09 AM GMT+5:30">
         <p className="mt-3 flex items-center gap-2">
           <CalendarDays className="h-4 w-4" aria-hidden="true" />
@@ -1747,11 +2063,11 @@ function DealCard({
         </p>
       </DealFieldTooltip>
       <DealFieldTooltip
-        label={`Amount: ${amount == null ? "Not set" : `₹${amount.toLocaleString("en-IN")}`} `}
+        label={`Amount: ${amount == null ? 'Not set' : `₹${amount.toLocaleString('en-IN')}`} `}
       >
         <p className="mt-2 flex items-center gap-2">
           <IndianRupee className="h-4 w-4" aria-hidden="true" />
-          {amount == null ? "—" : amount.toLocaleString("en-IN")}
+          {amount == null ? '—' : amount.toLocaleString('en-IN')}
         </p>
       </DealFieldTooltip>
       <DealFieldTooltip label="Lead owner: Soft Dev">
@@ -1829,7 +2145,7 @@ function DealCard({
                 <p className="text-[#666]">Due Oct 21, 2026 8:00 AM</p>
                 <p className="mt-4">
                   ♙ <strong>Owner</strong>　
-                  <span className="rounded-full bg-[#eee] px-2 py-1">SD</span>{" "}
+                  <span className="rounded-full bg-[#eee] px-2 py-1">SD</span>{' '}
                   Soft Dev
                 </p>
                 <p className="mt-4">
@@ -1867,7 +2183,7 @@ function NoteModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="border-b px-6 py-4 text-sm">
-          For{" "}
+          For{' '}
           <span className="ml-2 rounded-md border bg-[#f2f2f2] px-3 py-1 font-semibold">
             Deal
           </span>
@@ -1910,16 +2226,16 @@ function NoteModal({ onClose }: { onClose: () => void }) {
 }
 
 function TaskModal({ onClose }: { onClose: () => void }) {
-  const [title, setTitle] = useState("");
-  const [taskType, setTaskType] = useState("To-do");
-  const [priority, setPriority] = useState("None");
-  const [queue, setQueue] = useState("None");
-  const [assignee, setAssignee] = useState("Soft Dev");
-  const [dueDate, setDueDate] = useState("");
-  const [dueOption, setDueOption] = useState("Today");
+  const [title, setTitle] = useState('');
+  const [taskType, setTaskType] = useState('To-do');
+  const [priority, setPriority] = useState('None');
+  const [queue, setQueue] = useState('None');
+  const [assignee, setAssignee] = useState('Soft Dev');
+  const [dueDate, setDueDate] = useState('');
+  const [dueOption, setDueOption] = useState('Today');
   const customDateRef = useRef<HTMLInputElement>(null);
-  const [reminder, setReminder] = useState("No reminder");
-  const [notes, setNotes] = useState("");
+  const [reminder, setReminder] = useState('No reminder');
+  const [notes, setNotes] = useState('');
   const dueOptions = getDueDateOptions();
   return (
     <div
@@ -1932,7 +2248,7 @@ function TaskModal({ onClose }: { onClose: () => void }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim()) return;
-          console.info("Task created", {
+          console.info('Task created', {
             title,
             taskType,
             priority,
@@ -1969,7 +2285,7 @@ function TaskModal({ onClose }: { onClose: () => void }) {
                   onChange={(event) => {
                     const value = event.target.value;
                     setDueOption(value);
-                    if (value === "Custom Date")
+                    if (value === 'Custom Date')
                       window.setTimeout(
                         () => customDateRef.current?.showPicker(),
                         0,
@@ -2118,43 +2434,43 @@ function getDueDateOptions() {
     return date;
   };
   const format = (date: Date) =>
-    date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const weekday = (date: Date) =>
-    date.toLocaleDateString(undefined, { weekday: "long" });
+    date.toLocaleDateString(undefined, { weekday: 'long' });
   return [
-    { value: "Today", label: "Today" },
-    { value: "Tomorrow", label: `Tomorrow (${format(addDays(1))})` },
+    { value: 'Today', label: 'Today' },
+    { value: 'Tomorrow', label: `Tomorrow (${format(addDays(1))})` },
     {
-      value: "In 1 business day",
+      value: 'In 1 business day',
       label: `In 1 business day (${weekday(addDays(1))})`,
     },
     {
-      value: "In 2 business days",
+      value: 'In 2 business days',
       label: `In 2 business days (${weekday(addDays(2))})`,
     },
     {
-      value: "In 3 business days",
+      value: 'In 3 business days',
       label: `In 3 business days (${weekday(addDays(3))})`,
     },
-    { value: "In 1 week", label: `In 1 week (${format(addDays(7))})` },
-    { value: "In 2 weeks", label: `In 2 weeks (${format(addDays(14))})` },
-    { value: "In 1 month", label: `In 1 month (${format(addDays(30))})` },
-    { value: "In 3 months", label: `In 3 months (${format(addDays(90))})` },
-    { value: "In 6 months", label: `In 6 months (${format(addDays(180))})` },
-    { value: "Custom Date", label: "Custom Date" },
+    { value: 'In 1 week', label: `In 1 week (${format(addDays(7))})` },
+    { value: 'In 2 weeks', label: `In 2 weeks (${format(addDays(14))})` },
+    { value: 'In 1 month', label: `In 1 month (${format(addDays(30))})` },
+    { value: 'In 3 months', label: `In 3 months (${format(addDays(90))})` },
+    { value: 'In 6 months', label: `In 6 months (${format(addDays(180))})` },
+    { value: 'Custom Date', label: 'Custom Date' },
   ];
 }
 
 const filterOperators = [
-  "is any of",
-  "is equal to",
-  "is before",
-  "is after",
-  "is between",
-  "is more than",
-  "is less than",
-  "is known",
-  "is unknown",
+  'is any of',
+  'is equal to',
+  'is before',
+  'is after',
+  'is between',
+  'is more than',
+  'is less than',
+  'is known',
+  'is unknown',
 ];
 
 function PropertyFilter({ property }: { property: string }) {
@@ -2198,21 +2514,21 @@ function DealsTableEmpty({ deals }: { deals: Deal[] }) {
             {deals.map((deal) => (
               <tr className="border-b border-[#e7edf3]" key={deal.id}>
                 <td className="px-4 py-3 font-semibold text-[#213343]">
-                  {deal.company?.name ?? "--"}
+                  {deal.company?.name ?? '--'}
                 </td>
                 <td className="px-4 py-3 font-bold text-[#007a8a]">
                   {deal.name}
                 </td>
                 <td className="px-4 py-3">{deal.stage}</td>
                 <td className="px-4 py-3">
-                  {deal.amount == null ? "—" : `$${deal.amount}`}
+                  {deal.amount == null ? '—' : `$${deal.amount}`}
                 </td>
                 <td className="px-4 py-3">
                   {deal.closeDate
                     ? new Date(deal.closeDate).toLocaleDateString()
-                    : "—"}
+                    : '—'}
                 </td>
-                <td className="px-4 py-3">{deal.owner?.name ?? "No owner"}</td>
+                <td className="px-4 py-3">{deal.owner?.name ?? 'No owner'}</td>
               </tr>
             ))}
           </tbody>
@@ -2255,7 +2571,7 @@ function CircleButton({
       onClick={onClick}
       type="button"
     >
-      <Icon className={`h-4 w-4 ${spinning ? "animate-spin" : ""}`} />
+      <Icon className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`} />
     </button>
   );
 }

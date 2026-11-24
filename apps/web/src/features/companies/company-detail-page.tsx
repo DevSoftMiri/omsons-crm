@@ -58,7 +58,7 @@ const repairContactText = (value?: string | null) => {
 type CompanyDeal = { id: string; name: string; amount?: number | string | null; stage?: string | null; pipeline?: string | null; priority?: string | null; closeDate?: string | null; contactId?: string | null; company?: { id: string; name: string } | null; contact?: { id: string; firstName: string; lastName?: string | null } | null };
 type CompanyNote = { id: string; title?: string | null; body: string; createdAt: string; links?: Array<{ activityId: string; kind: string }> };
 type CompanyTask = { id: string; title: string; companyId: string; status?: "TODO" | "IN_PROGRESS" | "WAITING" | "COMPLETED"; dueAt?: string | null; reminderAt?: string | null; taskType?: string | null; priority?: string | null; queue?: string | null; notes?: string | null; doneAt?: string | null; assignee?: { id: string; name: string } | null; company?: { id: string; name: string } | null };
-type CompanyRecord = { id: string; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; customerType?: string | null; marketType?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; createdBy?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
+type CompanyRecord = { id: string; accountNumber?: number | null; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; customerType?: string | null; marketType?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; createdBy?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
 
 const _info = [
   ["Account owner", "No owner", UserRound],
@@ -98,13 +98,13 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
   const loadCompany = async () => {
     setMeetingsLoading(true);
     setMeetingsError("");
-    const response = await fetch(`${API_URL}/companies?limit=100`, { cache: "no-store" });
-    if (!response.ok) throw new Error("Unable to load companies from the production API");
-    const result = await response.json() as { data: CompanyRecord[] };
-    const records = result.data ?? [];
-    setCompanies(records);
-    let detail = await fetch(`${API_URL}/companies/${companyId}`, { cache: "no-store" });
+    let detail = await fetch(`${API_URL}/companies/${companyId}`, { headers: createHeaders(createIdempotencyKey()), cache: "no-store" });
     if (!detail.ok) {
+      const response = await fetch(`${API_URL}/companies?limit=100`, { headers: createHeaders(createIdempotencyKey()), cache: "no-store" });
+      if (!response.ok) throw new Error("Unable to load accounts from the production API");
+      const result = await response.json() as { data: CompanyRecord[] };
+      const records = result.data ?? [];
+      setCompanies(records);
       const normalized = companyId.toLowerCase().replace(/-/g, " ");
       const match = records.find((record) => record.id === companyId || record.name.toLowerCase() === normalized || record.name.toLowerCase().replace(/\s+/g, "-") === companyId.toLowerCase());
       if (match) detail = await fetch(`${API_URL}/companies/${match.id}`, { cache: "no-store" });
@@ -117,32 +117,31 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
     const loaded = await detail.json().catch(() => ({})) as Partial<CompanyRecord>;
     if (!loaded.id && !loaded.name) throw new Error("Account response was invalid");
     const resolvedCompanyId = String(loaded.id ?? companyId);
-    try {
-      const tasksResponse = await fetch(`${API_URL}/tasks?companyId=${encodeURIComponent(resolvedCompanyId)}`, { cache: "no-store" });
-      setCompanyTasks(tasksResponse.ok ? await tasksResponse.json() as CompanyTask[] : []);
-    } catch { setCompanyTasks([]); }
     const nestedDeals = Array.isArray(loaded.deals) ? loaded.deals : [];
     setDealsLoading(true);
     setDealsError("");
-    let associatedDeals = nestedDeals;
-    try {
-      const dealsResponse = await fetch(`${API_URL}/deals?companyId=${encodeURIComponent(resolvedCompanyId)}`, { cache: "no-store" });
-      if (!dealsResponse.ok) throw new Error("Unable to load company deals");
-      const dealsPayload = await dealsResponse.json() as unknown;
-      associatedDeals = Array.isArray(dealsPayload) ? dealsPayload as CompanyDeal[] : Array.isArray((dealsPayload as { data?: unknown })?.data) ? (dealsPayload as { data: CompanyDeal[] }).data : [];
-      if (process.env.NODE_ENV === "development" && associatedDeals.length === 0) console.warn("Account has no associated leads", { companyId: resolvedCompanyId, companyName: loaded.name ?? companyId, nestedDealCount: nestedDeals.length, apiDealCount: associatedDeals.length });
-    } catch (dealError) {
-      setDealsError(dealError instanceof Error ? dealError.message : "Unable to load company deals");
-      associatedDeals = nestedDeals;
-    } finally {
-      setDealsLoading(false);
-    }
+    const linkedCompanyId = encodeURIComponent(resolvedCompanyId);
+    const [tasksResult, dealsResult, meetingsResult, notesResult] = await Promise.allSettled([
+      fetch(`${API_URL}/tasks?companyId=${linkedCompanyId}`, { cache: "no-store" }).then(async (response) => response.ok ? await response.json() as CompanyTask[] : []),
+      fetch(`${API_URL}/deals?companyId=${linkedCompanyId}`, { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load company deals");
+        const payload = await response.json() as unknown;
+        return Array.isArray(payload) ? payload as CompanyDeal[] : Array.isArray((payload as { data?: unknown })?.data) ? (payload as { data: CompanyDeal[] }).data : [];
+      }),
+      fetch(`${API_URL}/meetings?companyId=${linkedCompanyId}&page=1&limit=100&sortBy=activityAt&sortOrder=desc`, { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load company meetings");
+        return response.json() as Promise<{ data?: Meeting[]; limit?: number; total?: number }>;
+      }),
+      fetch(`${API_URL}/notes?companyId=${linkedCompanyId}`, { cache: "no-store" }).then(async (response) => response.ok ? (await response.json() as { data?: CompanyNote[] }).data ?? [] : []),
+    ]);
+    const associatedDeals = dealsResult.status === "fulfilled" ? dealsResult.value : nestedDeals;
     setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: associatedDeals, regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: resolvedCompanyId, name: loaded.name ?? "Account", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
+    setCompanyTasks(tasksResult.status === "fulfilled" ? tasksResult.value : []);
+    if (dealsResult.status === "rejected") setDealsError(dealsResult.reason instanceof Error ? dealsResult.reason.message : "Unable to load company deals");
+    setDealsLoading(false);
     try {
-      const linkedCompanyId = encodeURIComponent((loaded.id ?? companyId) as string);
-      const firstPageResponse = await fetch(`${API_URL}/meetings?companyId=${linkedCompanyId}&page=1&limit=100&sortBy=activityAt&sortOrder=desc`, { cache: "no-store" });
-      if (!firstPageResponse.ok) throw new Error("Unable to load company meetings");
-      const firstPage = await firstPageResponse.json() as { data?: Meeting[]; limit?: number; total?: number };
+      if (meetingsResult.status === "rejected") throw meetingsResult.reason;
+      const firstPage = meetingsResult.value;
       const meetings = [...(firstPage.data ?? [])];
       const limit = firstPage.limit ?? 100;
       const pages = Math.ceil((firstPage.total ?? meetings.length) / limit);
@@ -155,8 +154,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       }
       meetings.sort((left, right) => new Date(right.activityAt).getTime() - new Date(left.activityAt).getTime() || right.id.localeCompare(left.id));
       setCompanyMeetings(meetings);
-      const notesResponse = await fetch(`${API_URL}/notes?companyId=${linkedCompanyId}`, { cache: "no-store" });
-      if (notesResponse.ok) setCompanyNotes(((await notesResponse.json()) as { data?: CompanyNote[] }).data ?? []);
+      if (notesResult.status === "fulfilled") setCompanyNotes(notesResult.value);
     } catch (meetingError) {
       setCompanyMeetings([]);
       setMeetingsError(meetingError instanceof Error ? meetingError.message : "Unable to load company meetings");
@@ -193,7 +191,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
             <span>Accounts</span>
           </Link>
           <ChevronRight className="h-3 w-3" />
-          <span className="font-semibold text-[#213343]">{company?.name ?? "Loading company..."}</span>
+          <span className="font-semibold text-[#213343]">{company?.name ?? "Loading account..."}</span>
         </div>
 
         <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => void openMeeting()} onOpenTask={() => setTaskModalOpen(true)} onOpenNote={() => setNoteModalOpen(true)} />
@@ -280,7 +278,7 @@ function CompanyHierarchy({ company, companies, newRegion, selectedSubCompany, s
     await fetch(`${API_URL}/companies/${company.id}/sub-companies/${id}`, { method: "DELETE" });
     await onRefresh();
   };
-  if (!company) return <PlaceholderTab title={error || "Loading company hierarchy"} />;
+  if (!company) return <PlaceholderTab title={error || "Loading account hierarchy"} />;
   const options = companies.filter((item) => item.id !== company.id && !item.parentCompanyId);
   return <div className="space-y-4 rounded-xl border border-[#dbe4ed] bg-white p-5">
     <div><h2 className="text-lg font-bold text-[#213343]">Company hierarchy</h2><p className="text-sm text-[#516f90]">Manage direct sub-units without rolling up their records.</p></div>
@@ -530,7 +528,7 @@ function CreateNoteModal({ company, users, onClose, onSaved }: { company: Compan
 }
 
 function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting, onOpenTask, onOpenNote }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void; onOpenTask: () => void; onOpenNote: () => void }) {
-  const companyName = company?.name ?? "Loading company...";
+  const companyName = company?.name ?? "Loading account...";
   const website = company?.website?.replace(/^https?:\/\//, "") ?? "No website";
   const isSubCompany = Boolean(company?.parentCompany);
   const hierarchyOptions = company?.parentCompany
@@ -545,7 +543,7 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
         <div className="hidden">
           <Link className="inline-flex items-center gap-2 text-sm font-bold text-[#343a40]" href="/">
             <ChevronLeft className="h-4 w-4" />
-            Companies
+            Accounts
           </Link>
           <button className="inline-flex items-center gap-1 text-sm font-bold">
             Actions
@@ -564,6 +562,7 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-[#111827]">{companyName}</h1>
+                <span className="rounded-full bg-[#f3f6f9] px-2.5 py-1 text-xs font-semibold text-[#516f90]">Account ID: {company?.accountNumber ?? "--"}</span>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isSubCompany ? "bg-[#f2f5f8] text-[#516f90]" : "bg-[#eef6ff] text-[#2563b8]"}`}>
                   {isSubCompany ? "Sub-unit" : "Head Office"}
                 </span>
@@ -577,8 +576,8 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
               {hierarchyOptions.length ? (
                 <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-[#516f90]">
                   <span>{isSubCompany ? "Sub-units" : "Switch to sub-unit"}</span>
-                  <select className="max-w-[220px] rounded-md border border-[#cbd6e2] bg-white px-2 py-1 text-xs font-semibold text-[#213343]" value={company?.id ?? ""} onChange={(event) => switchCompany(event.target.value)} aria-label="Switch company">
-                    {company ? <option value={company.id}>{isSubCompany ? company.name : "This company"}</option> : null}
+                  <select className="max-w-[220px] rounded-md border border-[#cbd6e2] bg-white px-2 py-1 text-xs font-semibold text-[#213343]" value={company?.id ?? ""} onChange={(event) => switchCompany(event.target.value)} aria-label="Switch account">
+                    {company ? <option value={company.id}>{isSubCompany ? company.name : "This account"}</option> : null}
                     {hierarchyOptions.filter((item) => item.id !== company?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>
                 </label>

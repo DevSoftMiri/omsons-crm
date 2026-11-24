@@ -1,6 +1,8 @@
 import { IsArray, IsObject, IsOptional, IsString, MinLength } from "class-validator";
 
 export class CompanyDto {
+  @IsOptional() accountNumber?: number;
+
   @IsOptional() @IsString()
   @MinLength(1)
   name?: string;

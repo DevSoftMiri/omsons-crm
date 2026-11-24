@@ -66,6 +66,35 @@ article .flex.flex-wrap.items-center.gap-2 > span { flex: 0 0 auto; }
   border-top: 1px solid #dbe4ed;
 }
 
+/* Keep account form metadata on one horizontal footer row. */
+.account-form-footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  white-space: nowrap;
+}
+
+.grid.min-w-0.flex-1.gap-3.sm\:grid-cols-3 {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.grid.min-w-0.flex-1.gap-3.sm\:grid-cols-3 > .flex.min-w-0.flex-1.flex-wrap {
+  flex-wrap: nowrap;
+  gap: 1.25rem;
+}
+
+/* Lifecycle stage colors in native account selectors. */
+select option[value="Subscriber"] { color: #2563eb; }
+select option[value="Lead"] { color: #7c3aed; }
+select option[value="Marketing Qualified Lead"] { color: #db2777; }
+select option[value="Sales Qualified Lead"] { color: #ea580c; }
+select option[value="Opportunity"] { color: #ca8a04; }
+select option[value="Customer"] { color: #16a34a; }
+select option[value="Evangelist"] { color: #0891b2; }
+select option[value="Other"] { color: #64748b; }
+
 /* Match the company-detail task editor dimensions on the global Tasks page. */
 [role="dialog"] form.max-w-4xl {
   width: min(960px, calc(100vw - 2rem));

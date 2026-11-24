@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </aside>
 
-      <div className={sidebarCollapsed ? "xl:pl-[68px]" : "xl:pl-[190px]"}>
+      <div className={`bg-[#232528] ${sidebarCollapsed ? "xl:pl-[68px]" : "xl:pl-[190px]"}`}>
         <header className="sticky top-0 z-50 flex h-[52px] items-center justify-between border-b border-black/10 bg-[#2f2f2f] px-3 text-white shadow-sm lg:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -255,7 +255,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="min-h-screen overflow-visible p-2 lg:p-3">{children}</main>
+        <main className="min-h-screen overflow-visible rounded-tl-[22px] bg-white p-0">{children}</main>
       </div>
     </div>
   );
