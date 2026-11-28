@@ -62,7 +62,7 @@ export class CompaniesService {
     if (parent.parentCompanyId) throw new BadRequestException("Sub-companies cannot have their own sub-companies");
   }
 
-  private include = { owner: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { include: { owner: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" as const } }, deals: { select: { id: true, name: true, amount: true, stage: true, pipeline: true, priority: true, closeDate: true, contactId: true, company: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
+  private include = { owner: { select: { id: true, name: true } }, createdBy: { select: { id: true, name: true } }, parentCompany: { select: { id: true, name: true } }, contacts: { take: 50, orderBy: { createdAt: "desc" as const }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, title: true, department: true, roleInPurchase: true, lifecycleStage: true, leadStatus: true, owner: { select: { id: true, name: true } }, company: { select: { id: true, name: true } } } }, deals: { take: 50, select: { id: true, name: true, amount: true, stage: true, pipeline: true, priority: true, closeDate: true, contactId: true, company: { select: { id: true, name: true } }, contact: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: "desc" as const } }, subCompanies: { where: { isArchived: false }, select: { id: true, name: true, regions: true, parentCompanyId: true }, orderBy: { name: "asc" as const } } };
 
   async list(query: Record<string, string | undefined>) {
     const page = Math.max(1, Number(query.page) || 1); const limit = Math.min(100, Math.max(1, Number(query.limit) || 25));
@@ -95,7 +95,12 @@ export class CompaniesService {
   async findOne(id: string) {
     const company = await this.prisma.company.findUnique({ where: { id }, include: this.include });
     if (!company) throw new NotFoundException("Company not found");
-    return company;
+    const latestAudit = await this.db.auditLog.findFirst({
+      where: { entityId: id, entity: { in: ["CompaniesController", "Company"] } },
+      orderBy: { createdAt: "desc" },
+      include: { actor: { select: { id: true, name: true } } }
+    });
+    return { ...company, lastModifiedBy: latestAudit?.actor ?? null };
   }
 
   async create(dto: CompanyDto, createdById: string | null = null) {

@@ -52,6 +52,6 @@ export function SortableBoardView<T extends { id: string }>({ columns, renderCar
   })}</div>;
 }
 
-export function RecordDetailHeader({ compact, children }: { compact: boolean; children: React.ReactNode }) {
-  return <section className={cn("sticky top-[52px] z-40 rounded-xl border border-[#d0d7de] bg-white shadow-sm transition-all duration-200", compact && "shadow-md")}>{children}</section>;
+export function RecordDetailHeader({ compact, children, sticky = true }: { compact: boolean; children: React.ReactNode; sticky?: boolean }) {
+  return <section className={cn("rounded-xl border border-[#d0d7de] bg-white shadow-sm transition-all duration-200", sticky && "sticky top-[52px] z-40", compact && "shadow-md")}>{children}</section>;
 }

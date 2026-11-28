@@ -58,7 +58,7 @@ const repairContactText = (value?: string | null) => {
 type CompanyDeal = { id: string; name: string; amount?: number | string | null; stage?: string | null; pipeline?: string | null; priority?: string | null; closeDate?: string | null; contactId?: string | null; company?: { id: string; name: string } | null; contact?: { id: string; firstName: string; lastName?: string | null } | null };
 type CompanyNote = { id: string; title?: string | null; body: string; createdAt: string; links?: Array<{ activityId: string; kind: string }> };
 type CompanyTask = { id: string; title: string; companyId: string; status?: "TODO" | "IN_PROGRESS" | "WAITING" | "COMPLETED"; dueAt?: string | null; reminderAt?: string | null; taskType?: string | null; priority?: string | null; queue?: string | null; notes?: string | null; doneAt?: string | null; assignee?: { id: string; name: string } | null; company?: { id: string; name: string } | null };
-type CompanyRecord = { id: string; accountNumber?: number | null; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; industry?: string | null; customerType?: string | null; marketType?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; createdBy?: { id: string; name: string } | null; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
+type CompanyRecord = { id: string; accountNumber?: number | null; name: string; website?: string | null; phone?: string | null; regions: string[]; city?: string | null; state?: string | null; postalCode?: string | null; country?: string | null; numberOfEmployees?: number | null; annualRevenue?: number | string | null; timeZone?: string | null; description?: string | null; linkedinCompanyPage?: string | null; accountSource?: string | null; gstNumber?: string | null; billingStreet?: string | null; billingCity?: string | null; billingState?: string | null; billingPostalCode?: string | null; billingCountry?: string | null; shippingStreet?: string | null; shippingCity?: string | null; shippingState?: string | null; shippingPostalCode?: string | null; shippingCountry?: string | null; shippingSameAsBilling?: boolean; industry?: string | null; customerType?: string | null; marketType?: string | null; lifecycleStage?: string | null; leadStatus?: string | null; ownerId?: string | null; ownerName?: string | null; owner?: { id: string; name: string } | null; createdBy?: { id: string; name: string } | null; lastModifiedBy?: { id: string; name: string } | null; createdAt?: string; updatedAt?: string; contacts: CompanyContact[]; deals: CompanyDeal[]; parentCompanyId: string | null; parentCompany?: { id: string; name: string } | null; subCompanies: Array<{ id: string; name: string; regions: string[] }> };
 
 const _info = [
   ["Account owner", "No owner", UserRound],
@@ -78,6 +78,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [rightRailCollapsed, setRightRailCollapsed] = useState(false);
   const [headerCompact, setHeaderCompact] = useState(false);
+  const [accountInformationExpanded, setAccountInformationExpanded] = useState(false);
   const [company, setCompany] = useState<CompanyRecord | null>(null);
   const [companies, setCompanies] = useState<CompanyRecord[]>([]);
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
@@ -118,6 +119,12 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
     if (!loaded.id && !loaded.name) throw new Error("Account response was invalid");
     const resolvedCompanyId = String(loaded.id ?? companyId);
     const nestedDeals = Array.isArray(loaded.deals) ? loaded.deals : [];
+    setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: nestedDeals, regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: resolvedCompanyId, name: loaded.name ?? "Account", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
+    if (activeTab !== "Activities") {
+      setDealsLoading(false);
+      setMeetingsLoading(false);
+      return;
+    }
     setDealsLoading(true);
     setDealsError("");
     const linkedCompanyId = encodeURIComponent(resolvedCompanyId);
@@ -135,7 +142,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       fetch(`${API_URL}/notes?companyId=${linkedCompanyId}`, { cache: "no-store" }).then(async (response) => response.ok ? (await response.json() as { data?: CompanyNote[] }).data ?? [] : []),
     ]);
     const associatedDeals = dealsResult.status === "fulfilled" ? dealsResult.value : nestedDeals;
-    setCompany({ ...loaded, contacts: Array.isArray(loaded.contacts) ? loaded.contacts : [], deals: associatedDeals, regions: Array.isArray(loaded.regions) ? loaded.regions : [], subCompanies: Array.isArray(loaded.subCompanies) ? loaded.subCompanies : [], id: resolvedCompanyId, name: loaded.name ?? "Account", parentCompanyId: loaded.parentCompanyId ?? null } as CompanyRecord);
+    setCompany((current) => current ? { ...current, deals: associatedDeals } : current);
     setCompanyTasks(tasksResult.status === "fulfilled" ? tasksResult.value : []);
     if (dealsResult.status === "rejected") setDealsError(dealsResult.reason instanceof Error ? dealsResult.reason.message : "Unable to load company deals");
     setDealsLoading(false);
@@ -162,7 +169,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
       setMeetingsLoading(false);
     }
   };
-  useEffect(() => { void loadCompany().catch(() => setError("Unable to load company hierarchy")); }, [companyId]);
+  useEffect(() => { if (activeTab !== "Activities" && company) return; void loadCompany().catch(() => setError("Unable to load company hierarchy")); }, [companyId, activeTab]);
   const openMeeting = async () => {
     try {
       const response = await fetch(`${API_URL}/users`, { cache: "no-store" });
@@ -194,7 +201,7 @@ export function CompanyDetailPage({ companyId = "seed-main-company" }: { company
           <span className="font-semibold text-[#213343]">{company?.name ?? "Loading account..."}</span>
         </div>
 
-        <CompanyHeader compact={headerCompact} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => void openMeeting()} onOpenTask={() => setTaskModalOpen(true)} onOpenNote={() => setNoteModalOpen(true)} />
+        <CompanyHeader compact={headerCompact && !accountInformationExpanded} company={company} companies={companies} users={users} onRefresh={loadCompany} onOpenMeeting={() => void openMeeting()} onOpenTask={() => setTaskModalOpen(true)} onOpenNote={() => setNoteModalOpen(true)} onAccountInformationExpandedChange={setAccountInformationExpanded} />
         <section className="mt-4 space-y-3">
 
             <div className="grid grid-cols-4 border-b border-[#dbe4ed] bg-transparent text-sm">
@@ -527,7 +534,7 @@ function CreateNoteModal({ company, users, onClose, onSaved }: { company: Compan
   return <div className="fixed inset-0 z-[110] grid place-items-center bg-[#111827]/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}><form className="flex max-h-[92vh] w-full max-w-[850px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl" onSubmit={submit}><div className="flex items-center justify-between border-b border-[#dbe4ed] px-5 py-4"><h2 className="text-lg font-bold text-[#213343]">Create note</h2><button type="button" aria-label="Close" onClick={onClose}><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-y-auto p-5"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-[#8293a6]">Note title<input className="mt-1 w-full rounded-md border border-[#cbd6e2] px-3 py-2 text-sm font-normal text-[#213343]" placeholder="Enter a note title" value={title} onChange={(event) => { setTitle(event.target.value); if (!followUpTitle) setFollowUpTitle(event.target.value); }} /></label><label className="text-xs font-semibold text-[#8293a6]">Account<input className="mt-1 w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-3 py-2 text-sm font-normal text-[#213343]" value={company.name} readOnly /></label></div><label className="mt-4 block text-xs font-semibold text-[#8293a6]">Note<div className="mt-1 overflow-hidden rounded-md border border-[#cbd6e2]"><div className="flex flex-wrap gap-1 border-b border-[#dbe4ed] bg-[#f7f9fb] p-2">{[["Paragraph", "heading", "p"], ["B", "bold"], ["I", "italic"], ["U", "underline"], ["S", "strike"], ["€ List", "bullet"], ["1. List", "number"], ["Quote", "heading", "blockquote"], ["Link", "link"]].map(([label, command, value]) => <button key={`${label}-${command}`} type="button" className="rounded px-2 py-1 text-xs font-semibold text-[#213343] hover:bg-white" aria-label={label} onClick={() => applyFormat(command, value)}>{label}</button>)}</div><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Note content" data-placeholder="Start typing your company notes€¦" className="min-h-40 p-4 text-sm font-normal text-[#213343] outline-none empty:before:text-[#9aaabd] empty:before:content-[attr(data-placeholder)]" onInput={(event) => setBody(event.currentTarget.innerHTML)} /></div></label><p className="mt-2 text-[11px] text-[#8293a6]">Write paragraphs, bullet points, numbered lists, or a mix of formats.</p><div className="mt-5"><div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-[#213343]">Associated with <span className="rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1 text-xs">–§ {company.name}</span><span className="text-xs text-[#007a8a]">+ Link existing activity</span></div><div className="mt-2 flex flex-wrap gap-2">{meetings.map((meeting) => <label className="inline-flex items-center gap-1 rounded-full border border-[#cbd6e2] px-2 py-1 text-xs" key={meeting.id}><input type="checkbox" checked={selected.includes(meeting.id)} onChange={() => setSelected((current) => current.includes(meeting.id) ? current.filter((id) => id !== meeting.id) : [...current, meeting.id])} />{meeting.name}</label>)}</div>{!meetings.length ? <p className="mt-2 text-xs text-[#8293a6]">No existing meetings found for this company.</p> : null}</div><label className="mt-5 flex items-center gap-2 border-t border-[#e7edf3] pt-4 text-sm text-[#213343]"><input type="checkbox" checked={followUp} onChange={(event) => setFollowUp(event.target.checked)} />Create a follow-up activity</label>{followUp ? <div className="mt-3 grid gap-3 rounded-lg bg-[#f7f9fb] p-3 sm:grid-cols-2"><label className="text-xs font-semibold text-[#516f90]">Activity type<select className="mt-1 w-full rounded border px-2 py-2 text-sm" value={followUpType} onChange={(event) => setFollowUpType(event.target.value)}><option value="TASK">To-do</option><option value="CALL">Call</option><option value="EMAIL">Email</option></select></label><label className="text-xs font-semibold text-[#516f90]">Assigned to<select className="mt-1 w-full rounded border px-2 py-2 text-sm" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}><option value="">No owner</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label><label className="text-xs font-semibold text-[#516f90] sm:col-span-2">Follow-up title<input className="mt-1 w-full rounded border px-2 py-2 text-sm" value={followUpTitle || title} onChange={(event) => setFollowUpTitle(event.target.value)} /></label><div className="sm:col-span-2"><p className="text-xs font-semibold text-[#516f90]">Follow-up date and time</p><div className="mt-1 flex flex-wrap gap-2">{presets.map((preset) => <button type="button" key={preset.label} className="rounded border px-2 py-1 text-xs" onClick={() => { const date = new Date(); let added = 0; while (added < preset.days) { date.setDate(date.getDate() + 1); if (date.getDay() !== 0 && date.getDay() !== 6) added++; } setDueAt(date.toISOString().slice(0, 16)); }}>{preset.label} ({businessDate(preset.days)})</button>)}<input className="rounded border px-2 py-1 text-sm" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></div></div></div> : null}{error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}</div><div className="flex justify-end gap-3 border-t border-[#dbe4ed] px-5 py-4"><button type="button" className="rounded-md border border-[#cbd6e2] px-4 py-2 text-sm" onClick={onClose}>Cancel</button><button type="submit" disabled={saving} className="rounded-md bg-[#007a83] px-5 py-2 text-sm font-semibold text-white">{saving ? "Creating..." : "Create note"}</button></div></form></div>;
 }
 
-function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting, onOpenTask, onOpenNote }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void; onOpenTask: () => void; onOpenNote: () => void }) {
+function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMeeting, onOpenTask, onOpenNote, onAccountInformationExpandedChange }: { compact: boolean; company: CompanyRecord | null; companies: CompanyRecord[]; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onOpenMeeting: () => void; onOpenTask: () => void; onOpenNote: () => void; onAccountInformationExpandedChange: (expanded: boolean) => void }) {
   const companyName = company?.name ?? "Loading account...";
   const website = company?.website?.replace(/^https?:\/\//, "") ?? "No website";
   const isSubCompany = Boolean(company?.parentCompany);
@@ -539,7 +546,7 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
   };
   return (
     <>
-      <RecordDetailHeader compact={compact}>
+      <RecordDetailHeader compact={compact} sticky={false}>
         <div className="hidden">
           <Link className="inline-flex items-center gap-2 text-sm font-bold text-[#343a40]" href="/">
             <ChevronLeft className="h-4 w-4" />
@@ -582,6 +589,12 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
                   </select>
                 </label>
               ) : null}
+              <div className="mt-2 flex max-w-full flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-[#516f90]">
+                <span className="inline-flex items-center gap-1 whitespace-nowrap"><span>Created by:</span><span className="text-[#213343]">{company?.createdBy?.name || "Creator unavailable"}</span></span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap"><span>Created date:</span><span className="text-[#213343]">{company?.createdAt ? new Date(company.createdAt).toLocaleDateString() : "--"}</span></span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap"><span>Last modified by:</span><span className="text-[#213343]">{company?.lastModifiedBy?.name || "Automatically recorded"}</span></span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap"><span>Last modified date:</span><span className="text-[#213343]">{company?.updatedAt ? new Date(company.updatedAt).toLocaleDateString() : "--"}</span></span>
+              </div>
             </div>
           </div>
           <div className={`mt-1 flex items-center gap-2 text-sm font-bold text-[#007a8a] lg:order-2 ${compact ? "hidden" : ""}`}>
@@ -607,7 +620,7 @@ function CompanyHeader({ compact, company, companies, users, onRefresh, onOpenMe
             ))}
           </div>
         </div>
-      {compact ? null : <CompanyInformationPanel company={company} users={users} onRefresh={onRefresh} />}
+      {compact ? null : <CompanyInformationPanel company={company} users={users} onRefresh={onRefresh} onExpandedChange={onAccountInformationExpandedChange} />}
       </RecordDetailHeader>
     </>
   );
@@ -711,7 +724,7 @@ function OverviewWorkspace() {
   );
 }
 
-function CompanyInformationPanel({ company, users, onRefresh }: { company: CompanyRecord | null; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void> }) {
+function CompanyInformationPanel({ company, users, onRefresh, onExpandedChange }: { company: CompanyRecord | null; users: Array<{ id: string; name: string }>; onRefresh: () => Promise<void>; onExpandedChange: (expanded: boolean) => void }) {
   type EditableField = "ownerName" | "industry" | "customerType" | "marketType" | "name" | "city" | "state" | "postalCode" | "numberOfEmployees" | "annualRevenue" | "timeZone" | "description" | "linkedinCompanyPage" | "lifecycleStage";
   type Drafts = Record<EditableField, string>;
   const emptyDrafts: Drafts = { ownerName: "", industry: "", customerType: "", marketType: "", name: "", city: "", state: "", postalCode: "", numberOfEmployees: "", annualRevenue: "", timeZone: "", description: "", linkedinCompanyPage: "", lifecycleStage: "Subscriber" };
@@ -781,12 +794,20 @@ function CompanyInformationPanel({ company, users, onRefresh }: { company: Compa
   const saveOnBlur = (field: EditableField) => void updateField(field, drafts[field]);
   const filteredIndustries = industryOptions.filter((industry) => industry.toLocaleLowerCase().includes(industrySearch.trim().toLocaleLowerCase()));
   const lifecycleStages = ["Subscriber", "Lead", "Marketing Qualified Lead", "Sales Qualified Lead", "Opportunity", "Customer", "Evangelist", "Other"];
-  const baseTextFields = [["Market type", "marketType", company?.marketType, Building2]] as const;
   const additionalTextFields = [
-    ["Account type", "customerType", company?.customerType, BriefcaseBusiness], ["City", "city", company?.city, MapPin],
-    ["State/Region", "state", company?.state, MapPin], ["Postal code", "postalCode", company?.postalCode, MapPin],
-    ["Number of employees", "numberOfEmployees", company?.numberOfEmployees, UsersRound], ["Annual revenue", "annualRevenue", company?.annualRevenue, Target], ["Time zone", "timeZone", company?.timeZone, CalendarDays], ["LinkedIn company page", "linkedinCompanyPage", company?.linkedinCompanyPage, ExternalLink]
+    ["Account source", company?.accountSource, BriefcaseBusiness], ["Market type", company?.marketType, Building2], ["Company website", company?.website, ExternalLink], ["Phone number", company?.phone, Phone], ["GST number", company?.gstNumber, Building2], ["LinkedIn company page", company?.linkedinCompanyPage, ExternalLink],
+    ["Billing street / address", company?.billingStreet, MapPin], ["Billing city", company?.billingCity, MapPin], ["Billing state / province", company?.billingState, MapPin], ["Billing ZIP / postal code", company?.billingPostalCode, MapPin], ["Billing country", company?.billingCountry, MapPin],
+    ["Shipping street / address", company?.shippingStreet, MapPin], ["Shipping city", company?.shippingCity, MapPin], ["Shipping state / province", company?.shippingState, MapPin], ["Shipping ZIP / postal code", company?.shippingPostalCode, MapPin], ["Shipping country", company?.shippingCountry, MapPin],
+    ["Shipping same as billing", company?.shippingSameAsBilling ? "Yes" : "No", MapPin], ["Number of employees", company?.numberOfEmployees, UsersRound], ["Annual revenue", company?.annualRevenue, Target], ["Time zone", company?.timeZone, CalendarDays]
   ] as const;
+  const displayOnlyFields = [
+    ["Billing street / address", company?.billingStreet, MapPin], ["Billing country", company?.billingCountry, MapPin], ["Shipping street / address", company?.shippingStreet, MapPin],
+    ["Shipping city", company?.shippingCity, MapPin], ["Shipping state / province", company?.shippingState, MapPin],
+    ["Shipping ZIP / postal code", company?.shippingPostalCode, MapPin], ["Shipping country", company?.shippingCountry, MapPin],
+    ["Shipping same as billing", company?.shippingSameAsBilling ? "Yes" : "No", MapPin],
+  ] as const;
+  const displayValue = (value: unknown) => value === undefined || value === null || value === "" ? "--" : String(value);
+  const primaryFields: Array<[string, string | null | undefined, React.ComponentType<{ className?: string }>]> = [["Account name", company?.name, Building2], ["Company type", company?.customerType, BriefcaseBusiness]];
   return (
       <aside className="h-max border-t border-[#dbe4ed] bg-white px-4 py-2">
       <div className="mb-3 flex items-center justify-between">
@@ -794,38 +815,25 @@ function CompanyInformationPanel({ company, users, onRefresh }: { company: Compa
         <Ellipsis className="h-4 w-4 text-[#516f90]" />
       </div>
       <div className="grid gap-3 lg:grid-cols-4">
+        {primaryFields.map(([label, value, Icon]) => { const IconComponent = Icon; return <label className="grid grid-cols-[26px_1fr] gap-3" key={label}><IconComponent className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">{label}</span><input className="w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1.5 text-sm font-semibold text-[#213343]" readOnly value={displayValue(value)} /></span></label>; })}
         <label className="grid grid-cols-[26px_1fr] gap-3"><Target className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">Lifecycle stage</span><select className="w-full rounded-md border border-[#cbd6e2] px-2 py-1.5 text-sm font-semibold text-[#213343]" value={drafts.lifecycleStage} disabled={savingFields.has("lifecycleStage")} onChange={(event) => updateDraft("lifecycleStage", event.target.value)} onBlur={() => saveOnBlur("lifecycleStage")}>{lifecycleStages.map((stage) => <option key={stage}>{stage}</option>)}</select>{savingFields.has("lifecycleStage") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("lifecycleStage") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.lifecycleStage ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.lifecycleStage} <button type="button" className="underline" onClick={() => saveOnBlur("lifecycleStage")}>Retry</button></span> : null}</span></label>
-        <div className="flex items-end gap-2">
-          <UserRound className="mb-2 h-5 w-5 text-[#516f90]" />
-          <label className="min-w-0 flex-1 text-xs text-[#516f90]">Created by<input className="mt-1 w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1.5 text-sm font-semibold text-[#213343]" readOnly value={company?.createdBy?.name || "Creator unavailable"} />{savingFields.has("ownerName") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("ownerName") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.ownerName ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.ownerName} <button type="button" className="underline" onClick={() => saveOnBlur("ownerName")}>Retry</button></span> : null}</label>
-        </div>
         <div className="relative grid grid-cols-[26px_1fr] gap-3">
           <Building2 className="mt-6 h-4 w-4 text-[#516f90]" />
           <span><span className="mb-1 block text-xs text-[#516f90]">Industry</span><button type="button" className="flex w-full items-center justify-between rounded-md border border-[#cbd6e2] px-2 py-1 text-left text-sm font-semibold text-[#213343]" onClick={() => setIndustryOpen((open) => !open)}><span className="truncate">{drafts.industry || "Select industry"}</span><ChevronDown className="h-4 w-4 shrink-0" /></button>{industryOpen ? <div className="absolute left-7 right-0 top-[54px] z-30 rounded-xl border border-[#cbd6e2] bg-white p-3 shadow-xl"><div className="flex items-center rounded-full border-2 border-[#1473e6] px-3"><Search className="h-4 w-4 text-[#516f90]" /><input autoFocus className="min-w-0 flex-1 px-2 py-2 text-sm outline-none" placeholder="Search" value={industrySearch} onChange={(event) => setIndustrySearch(event.target.value)} /></div><div className="mt-2 max-h-64 overflow-y-auto">{filteredIndustries.map((industry) => <button type="button" key={industry} className="block w-full rounded px-2 py-2 text-left text-sm hover:bg-[#f1f5f9]" onClick={() => { setIndustryOpen(false); setIndustrySearch(""); updateDraft("industry", industry); void updateField("industry", industry); }}>{industry}</button>)}{!filteredIndustries.length ? <p className="px-2 py-3 text-sm text-[#516f90]">No industries found.</p> : null}</div></div> : null}{savingFields.has("industry") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("industry") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.industry ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.industry} <button type="button" className="underline" onClick={() => saveOnBlur("industry")}>Retry</button></span> : null}</span>
         </div>
-        {baseTextFields.map(([label, field, value, Icon]) => (
-          <label className="grid grid-cols-[26px_1fr] gap-3" key={label}>
-            <Icon className="mt-6 h-4 w-4 text-[#516f90]" />
-            <span>
-              <span className="mb-1 block text-xs text-[#516f90]">{label}</span>
-              <input className="w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts[field]} disabled={savingFields.has(field)} onChange={(event) => updateDraft(field, event.target.value)} onBlur={() => saveOnBlur(field)} />
-              {savingFields.has(field) ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has(field) ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors[field] ? <span className="mt-1 block text-xs text-red-700">{fieldErrors[field]} <button type="button" className="underline" onClick={() => saveOnBlur(field)}>Retry</button></span> : null}
-            </span>
-          </label>
-        ))}
-        <button className="lg:col-span-4 inline-flex items-center justify-center gap-2 rounded-md border border-[#cbd6e2] px-3 py-2 text-sm font-semibold text-[#516f90] hover:bg-[#f7f9fb]" type="button" onClick={() => setShowMore((current) => !current)}>{showMore ? "Show less" : "See more"}{showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+        <button className={`lg:col-span-4 inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors ${showMore ? "border-[#1473e6] bg-[#e8f1ff] text-[#1473e6] ring-1 ring-[#1473e6]/30" : "border-[#cbd6e2] text-[#516f90] hover:bg-[#f7f9fb]"}`} type="button" aria-expanded={showMore} onClick={() => { const next = !showMore; setShowMore(next); onExpandedChange(next); }}>{showMore ? "Show less" : "See more"}{showMore ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
         {showMore ? <>
-          {additionalTextFields.map(([label, field, value, Icon]) => (
+          {additionalTextFields.map(([label, value, Icon]) => (
             <label className="grid grid-cols-[26px_1fr] gap-3" key={label}>
               <Icon className="mt-6 h-4 w-4 text-[#516f90]" />
               <span>
                 <span className="mb-1 block text-xs text-[#516f90]">{label}</span>
-                <input className="w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts[field]} disabled={savingFields.has(field)} type={field === "numberOfEmployees" || field === "annualRevenue" ? "number" : "text"} onChange={(event) => updateDraft(field, event.target.value)} onBlur={() => saveOnBlur(field)} />
-                {savingFields.has(field) ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has(field) ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors[field] ? <span className="mt-1 block text-xs text-red-700">{fieldErrors[field]} <button type="button" className="underline" onClick={() => saveOnBlur(field)}>Retry</button></span> : null}
+                <input className="w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1 text-sm font-semibold text-[#213343]" value={displayValue(value)} readOnly />
               </span>
             </label>
           ))}
-          <label className="grid grid-cols-[26px_1fr] gap-3 lg:col-span-4"><FileUp className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">Description</span><textarea className="min-h-20 w-full rounded-md border border-[#cbd6e2] px-2 py-1 text-sm font-semibold text-[#213343]" value={drafts.description} disabled={savingFields.has("description")} onChange={(event) => updateDraft("description", event.target.value)} onBlur={() => saveOnBlur("description")} />{savingFields.has("description") ? <span className="mt-1 block text-xs text-[#516f90]">Saving...</span> : savedFields.has("description") ? <span className="mt-1 block text-xs text-green-700">Saved</span> : fieldErrors.description ? <span className="mt-1 block text-xs text-red-700">{fieldErrors.description} <button type="button" className="underline" onClick={() => saveOnBlur("description")}>Retry</button></span> : null}</span></label>
+          <div className="lg:col-span-4 mt-2 border-t border-[#dbe4ed] pt-3"><p className="mb-3 text-sm font-bold text-[#213343]">Additional account and address details</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{displayOnlyFields.map(([label, value, Icon]) => <label className="grid grid-cols-[26px_1fr] gap-3" key={label}><Icon className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">{label}</span><input className="w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1 text-sm font-semibold text-[#213343]" readOnly value={displayValue(value)} /></span></label>)}</div></div>
+          <label className="grid grid-cols-[26px_1fr] gap-3 lg:col-span-4"><FileUp className="mt-6 h-4 w-4 text-[#516f90]" /><span><span className="mb-1 block text-xs text-[#516f90]">Description</span><textarea className="min-h-20 w-full rounded-md border border-[#cbd6e2] bg-[#f7f9fb] px-2 py-1 text-sm font-semibold text-[#213343]" readOnly value={displayValue(company?.description)} /></span></label>
         </> : null}
       </div>
     </aside>
